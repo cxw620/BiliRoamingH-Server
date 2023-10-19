@@ -1,0 +1,33 @@
+[package]
+name = "biliroamingh_rust_server"
+version = "0.1.0"
+authors = ["Hantong Chen <hantong@utop.win>"]
+edition = "2021"
+rust-version = "1.75"
+
+[workspace]
+resolver = "2"
+members = [
+    # -- Application libs
+    "crates/libs/lib-core",
+    "crates/libs/lib-rpc",
+    "crates/libs/lib-utils",
+
+    # -- Services
+    "crates/services",
+
+    # -- Tools
+]
+exclude = [
+    "crates/libs/lib-bilibili",
+]
+
+[[bin]]
+bench = false
+path = "crates/core/main.rs"
+name = "biliroamingh_rust_server"
+
+[dependencies]
+axum = { version = "0.7", features = ["http2"]}
+services ={ path = "crates/services"}
+tokio = { version = "1.35", features = ["full"] }
