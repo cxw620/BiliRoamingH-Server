@@ -59,6 +59,8 @@ impl<T: Serialize> From<T> for GeneralResponse<T> {
 //     }
 // }
 
+use lib_utils::error::{ServerError, TError};
+
 #[derive(Clone)]
 pub struct DefaultHandler;
 
@@ -72,10 +74,11 @@ impl<T, S> axum::handler::Handler<T, S> for DefaultHandler {
             "path": req_uri.path(),
             "query": req_uri.query(),
         });
+        let err = ServerError::ServerInternalNotImpl;
         Box::pin(async move {
             GeneralResponse {
-                code: 0,
-                message: "".to_string(),
+                code: err.e_code(),
+                message: err.e_message().to_string(),
                 ttl: 1,
                 data: Some(data),
             }
