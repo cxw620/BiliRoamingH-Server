@@ -1,5 +1,8 @@
-use super::sign::Signer;
+use anyhow::Result;
 use std::borrow::Cow;
+
+use super::error::ServerError;
+use super::sign::Signer;
 
 #[derive(Debug)]
 pub struct QueryBuilder<'q> {
@@ -121,5 +124,67 @@ pub mod test {
     fn test_encode_space() {
         let params = vec![("a", "b c".into()), ("c", "d".into())];
         assert_eq!(encode_parameters(params, false), "a=b%20c&c=d");
+    }
+}
+
+/// For faster url query parsing usage onlly
+pub type RawQueryMap<'m> = std::collections::HashMap<Cow<'m, str>, Cow<'m, str>>;
+
+/// High performance struct for parsing query
+pub struct QueryMap<'m> {
+    inner: RawQueryMap<'m>,
+}
+
+impl<'m> From<RawQueryMap<'m>> for QueryMap<'m> {
+    fn from(value: RawQueryMap<'m>) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl<'m> QueryMap<'m> {
+    pub fn get(&'m self, k: &str) -> Option<&'m str> {
+        self.inner.get(k).map(|v| v.as_ref())
+    }
+
+    pub fn inner(&'m self) -> &'m RawQueryMap<'m> {
+        &self.inner
+    }
+
+    pub fn inner_mut(&'m mut self) -> &'m mut RawQueryMap<'m> {
+        &mut self.inner
+    }
+
+    pub fn into_inner(self) -> RawQueryMap<'m> {
+        self.inner
+    }
+
+    /// Convert to `Vec<(Cow<'m, str>, Cow<'m, str>)>`. **EXPENSIVE**
+    pub fn into_vec(self) -> Vec<(Cow<'m, str>, Cow<'m, str>)> {
+        self.inner.into_iter().collect()
+    }
+
+    /// Convert to `Vec<(String, String)>`. **VERY EXPENSIVE**
+    pub fn into_vec_owned(self) -> Vec<(String, String)> {
+        self.inner
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    pub fn try_from_uri(uri: &'m http::Uri) -> Result<Self> {
+        let query = uri.query().ok_or(ServerError::FatalReqParamInvalid)?;
+        Self::try_from_str(query)
+    }
+
+    #[inline]
+    pub fn try_from_str(query: &'m str) -> Result<Self> {
+        let query_map: QueryMap<'m> = fluent_uri::enc::EStr::new(query)
+            .split('&')
+            .filter_map(|pair| pair.split_once('='))
+            .map(|(k, v)| (k.decode(), v.decode()))
+            .filter_map(|(k, v)| k.into_string().ok().zip(v.into_string().ok())) // ! Will ignore param with invalid UTF-8 bytes
+            .collect::<std::collections::HashMap<_, _>>() // TODO Use AHashMap instead
+            .into();
+        Ok(query_map)
     }
 }

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 axum = { version = "0.7", default-features = false }
+fluent-uri = "0.1.4"
 http = "1.0"
 md-5 = "0.10.6"
 num_enum = "0.7"
