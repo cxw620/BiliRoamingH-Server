@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::error;
 
 use lib_utils::error::{ServerError, ServerErrorExt, TError};
 
@@ -132,7 +133,7 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
             "/any" => Err(anyhow!(ServerErrorExt::Any { source: anyhow!("anyhow error") })),
             "/custom" => Err(anyhow!(ServerErrorExt::Custom { code: 5_500_000, message: "custom error".to_string() })),
             _ => {
-                println!("req.uri().path(): {}", req.uri().path());
+                error!("req.uri().path(): {}", req.uri().path());
                 Err(anyhow::anyhow!(ServerError::ServerInternalNotImpl))
             },
         };

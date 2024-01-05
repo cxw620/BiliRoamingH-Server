@@ -1,6 +1,7 @@
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use tracing::error;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ErrorResponse {
@@ -211,8 +212,7 @@ impl<'e> TError<'e> for ServerErrorExt {
                 } else if let Some(e) = source.downcast_ref::<ServerError>() {
                     e.e_message()
                 } else {
-                    // TODO Log here
-                    println!("anyhow error: {:?}", source);
+                    error!("Unknown anyhow error: {:?}", source);
                     "服务器内部错误".into()
                 }
             }

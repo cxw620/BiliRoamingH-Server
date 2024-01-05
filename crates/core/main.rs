@@ -1,9 +1,13 @@
 extern crate services;
 
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
 use services::{DefaultHandler, RouterTest};
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry().with(fmt::layer()).init();
+
     let app = axum::Router::new()
         .nest("/test", RouterTest::new())
         .fallback::<_, ()>(DefaultHandler);
