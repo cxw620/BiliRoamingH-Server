@@ -1,6 +1,30 @@
+use anyhow::anyhow;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use lib_utils::error::{ServerError, ServerErrorExt, TError};
+
+pub type ServiceResult<T> = Result<T, anyhow::Error>;
+
+pub trait ServiceResultIntoResponse<T> {
+    fn into_response(self) -> axum::response::Response;
+}
+
+impl<T: Serialize> ServiceResultIntoResponse<T> for ServiceResult<T> {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Ok(data) => GeneralResponse {
+                code: 0,
+                message: "".to_string(),
+                ttl: 1,
+                data: Some(data),
+            }
+            .into_response(),
+            Err(err) => ServerErrorExt::from(err).into_response(),
+        }
+    }
+}
 
 pub type HandlerFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = axum::response::Response> + Send>>;
@@ -59,8 +83,6 @@ impl<T: Serialize> From<T> for GeneralResponse<T> {
 //     }
 // }
 
-use lib_utils::error::{ServerError, TError};
-
 #[derive(Clone)]
 pub struct DefaultHandler;
 
@@ -84,5 +106,36 @@ impl<T, S> axum::handler::Handler<T, S> for DefaultHandler {
             }
             .into_response()
         })
+    }
+}
+
+#[derive(Default)]
+pub struct RouterTest;
+
+impl RouterTest {
+    pub fn new() -> axum::Router {
+        axum::Router::new().fallback::<_, ()>(TestHandler)
+    }
+}
+
+#[derive(Clone)]
+struct TestHandler;
+
+impl<T, S> axum::handler::Handler<T, S> for TestHandler {
+    type Future = HandlerFuture;
+
+    fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
+        let e = match req.uri().path() {
+            "/ok_empty" => Ok("ok_empty"),
+            "/fatal" => Err(anyhow!(ServerError::ServerFatal)),
+            "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any { source: anyhow!(ServerError::ServicesDeprecated) })),
+            "/any" => Err(anyhow!(ServerErrorExt::Any { source: anyhow!("anyhow error") })),
+            "/custom" => Err(anyhow!(ServerErrorExt::Custom { code: 5_500_000, message: "custom error".to_string() })),
+            _ => {
+                println!("req.uri().path(): {}", req.uri().path());
+                Err(anyhow::anyhow!(ServerError::ServerInternalNotImpl))
+            },
+        };
+        Box::pin(async move { e.into_response() })
     }
 }

@@ -1,4 +1,12 @@
+use axum::response::IntoResponse;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+
+#[derive(Serialize, Deserialize, Clone)]
+struct ErrorResponse {
+    pub code: i64,
+    pub message: String,
+}
 
 pub trait TError<'e>: Sized + std::error::Error {
     fn e_code(&self) -> i64 {
@@ -7,8 +15,15 @@ pub trait TError<'e>: Sized + std::error::Error {
     fn e_message(&'e self) -> std::borrow::Cow<'e, str> {
         Cow::Borrowed("服务器内部错误")
     }
-    fn e_json(&self) -> String {
-        r#"{{"code": 5500000, "message": "服务器内部错误"}}"#.to_owned()
+    // fn e_json(&self) -> String {
+    //     r#"{{"code": 5500000, "message": "服务器内部错误"}}"#.to_owned()
+    // }
+    fn e_response(&'e self) -> axum::response::Response {
+        axum::response::Json(ErrorResponse {
+            code: self.e_code(),
+            message: self.e_message().to_string(),
+        })
+        .into_response()
     }
 }
 
@@ -152,5 +167,73 @@ impl<'e> TError<'e> for ServerError {
     }
     fn e_message(&self) -> Cow<'e, str> {
         self.to_string().into()
+    }
+}
+
+impl IntoResponse for ServerError {
+    fn into_response(self) -> axum::response::Response {
+        self.e_response()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServerErrorExt {
+    #[error(transparent)]
+    Server(#[from] ServerError),
+    #[error(transparent)]
+    Any { source: anyhow::Error },
+    #[error("{message}")]
+    Custom { code: i64, message: String },
+}
+
+impl<'e> TError<'e> for ServerErrorExt {
+    fn e_code(&self) -> i64 {
+        match self {
+            Self::Server(e) => e.e_code(),
+            Self::Any { source } => {
+                if let Some(e) = source.downcast_ref::<Self>() {
+                    e.e_code()
+                } else if let Some(e) = source.downcast_ref::<ServerError>() {
+                    e.e_code()
+                } else {
+                    5_500_000
+                }
+            }
+            Self::Custom { code, .. } => *code,
+        }
+    }
+    fn e_message(&'e self) -> Cow<'e, str> {
+        match self {
+            Self::Server(e) => e.e_message(),
+            Self::Any { source } => {
+                if let Some(e) = source.downcast_ref::<Self>() {
+                    e.e_message()
+                } else if let Some(e) = source.downcast_ref::<ServerError>() {
+                    e.e_message()
+                } else {
+                    // TODO Log here
+                    println!("anyhow error: {:?}", source);
+                    "服务器内部错误".into()
+                }
+            }
+            Self::Custom { message, .. } => message.into(),
+        }
+    }
+}
+
+impl IntoResponse for ServerErrorExt {
+    fn into_response(self) -> axum::response::Response {
+        self.e_response()
+    }
+}
+
+impl From<anyhow::Error> for ServerErrorExt {
+    fn from(e: anyhow::Error) -> Self {
+        let err = match e.downcast::<ServerError>() {
+            Ok(err) => return Self::Server(err),
+            Err(err) => err,
+        };
+
+        Self::Any { source: err }
     }
 }
