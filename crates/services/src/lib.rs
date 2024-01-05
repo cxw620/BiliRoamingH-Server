@@ -1,10 +1,9 @@
 use anyhow::anyhow;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tracing::error;
+use tracing::{error, warn};
 
-use lib_utils::error::{ServerError, ServerErrorExt, TError};
+use lib_utils::error::{ServerError, ServerErrorExt};
 
 pub type ServiceResult<T> = Result<T, anyhow::Error>;
 
@@ -91,21 +90,14 @@ impl<T, S> axum::handler::Handler<T, S> for DefaultHandler {
     type Future = HandlerFuture;
 
     fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
-        let req_uri = req.uri();
-        let data = json!({
-            "host": req_uri.host(),
-            "path": req_uri.path(),
-            "query": req_uri.query(),
-        });
-        let err = ServerError::ServerInternalNotImpl;
         Box::pin(async move {
-            GeneralResponse {
-                code: err.e_code(),
-                message: err.e_message().to_string(),
-                ttl: 1,
-                data: Some(data),
-            }
-            .into_response()
+            let req_uri = req.uri();
+            warn!(
+                "Detect unknown path [{}] with query [{:?}].",
+                req_uri.path(),
+                req_uri.query()
+            );
+            ServerError::ServicesUnsupported.into_response()
         })
     }
 }
@@ -126,17 +118,26 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
     type Future = HandlerFuture;
 
     fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
-        let e = match req.uri().path() {
-            "/ok_empty" => Ok("ok_empty"),
-            "/fatal" => Err(anyhow!(ServerError::ServerFatal)),
-            "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any { source: anyhow!(ServerError::ServicesDeprecated) })),
-            "/any" => Err(anyhow!(ServerErrorExt::Any { source: anyhow!("anyhow error") })),
-            "/custom" => Err(anyhow!(ServerErrorExt::Custom { code: 5_500_000, message: "custom error".to_string() })),
-            _ => {
-                error!("req.uri().path(): {}", req.uri().path());
-                Err(anyhow::anyhow!(ServerError::ServerInternalNotImpl))
-            },
-        };
-        Box::pin(async move { e.into_response() })
+        Box::pin(async move {
+            match req.uri().path() {
+                "/ok_empty" => Ok("ok_empty"),
+                "/fatal" => Err(anyhow!(ServerError::ServerFatal)),
+                "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any {
+                    source: anyhow!(ServerError::ServicesDeprecated)
+                })),
+                "/any" => Err(anyhow!(ServerErrorExt::Any {
+                    source: anyhow!("anyhow error")
+                })),
+                "/custom" => Err(anyhow!(ServerErrorExt::Custom {
+                    code: 5_500_000,
+                    message: "custom error".to_string()
+                })),
+                _ => {
+                    error!("req.uri().path(): {}", req.uri().path());
+                    Err(anyhow!(ServerError::ServerInternalNotImpl))
+                }
+            }
+            .into_response()
+        })
     }
 }
