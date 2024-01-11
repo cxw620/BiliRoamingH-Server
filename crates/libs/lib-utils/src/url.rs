@@ -142,6 +142,7 @@ impl<'m> From<RawQueryMap<'m>> for QueryMap<'m> {
 }
 
 impl<'m> QueryMap<'m> {
+    #[inline]
     pub fn get(&'m self, k: &str) -> Option<&'m str> {
         self.inner.get(k).map(|v| v.as_ref())
     }
@@ -171,6 +172,13 @@ impl<'m> QueryMap<'m> {
             .collect()
     }
 
+    #[inline]
+    pub fn try_from_req(req: &'m axum::extract::Request) -> Result<Self> {
+        let query = req.uri().query().ok_or(ServerError::FatalReqParamInvalid)?;
+        Self::try_from_str(query)
+    }
+
+    #[inline]
     pub fn try_from_uri(uri: &'m http::Uri) -> Result<Self> {
         let query = uri.query().ok_or(ServerError::FatalReqParamInvalid)?;
         Self::try_from_str(query)
