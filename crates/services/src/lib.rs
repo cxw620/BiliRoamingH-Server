@@ -1,3 +1,5 @@
+pub mod playurl;
+
 use anyhow::anyhow;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
