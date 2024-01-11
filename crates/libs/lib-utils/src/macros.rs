@@ -57,7 +57,7 @@ macro_rules! encode_grpc_header_bin {
 ///
 /// ```rust
 /// use lib_utils::now;
-/// 
+///
 /// let now_ts_sec = now!().as_secs(); // Seconds since UNIX_EPOCH
 /// let now_ts_millis = now!().as_millis(); // Milliseconds since UNIX_EPOCH
 /// ```
@@ -78,7 +78,7 @@ macro_rules! now {
 ///
 /// ```rust
 /// use lib_utils::random_string;
-/// 
+///
 /// let rs_1 = random_string!(32); // Use default charset `b"0123456789abcdef"`
 /// let rs_2 = random_string!(32, b"0123456789abcdefABCDEF");
 /// ```
@@ -101,5 +101,45 @@ macro_rules! random_string {
                 CHARSET[idx] as char
             })
             .collect::<String>()
+    }};
+}
+
+#[macro_export]
+/// + Generates a random string by choosing ones from given candidates.
+///
+/// Candidates should be `Vec<&str>` or `[&'a str]`.
+///
+/// # Examples
+///
+/// ```
+/// use lib_utils::random_choice;
+///
+/// static DIGHT_MAP: [&'static str; 17] = [
+/// "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "10",
+/// ];
+///
+/// let rc_1 = random_choice!(32, DIGHT_MAP);
+/// let rc_2 = random_choice!(8, 4, 4, 4, 12; "-"; DIGHT_MAP); // like `8310B0E0A-40105-9EC3-8298-36C75D10FEA59`
+/// ```
+macro_rules! random_choice {
+    ($range: expr, $choice_set: expr) => {{
+        let mut rng = rand::thread_rng();
+        let mut result = String::with_capacity(32);
+        (0..$range).for_each(|_| {
+            result.push_str($choice_set[rand::Rng::gen_range(&mut rng, 0..$choice_set.len())]);
+        });
+        result
+    }};
+    ($($range: expr),+; $split: expr; $choice_set: expr) => {{
+        let mut rng = rand::thread_rng();
+        let mut result = String::with_capacity(32);
+        $(
+            (0..$range).for_each(|_| {
+                result.push_str($choice_set[rand::Rng::gen_range(&mut rng, 0..$choice_set.len())]);
+            });
+            result.push_str($split);
+        )+
+        result.truncate(result.len() - $split.len());
+        result
     }};
 }
