@@ -7,28 +7,9 @@ use http::{header, HeaderValue};
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
-use lib_utils::error::{ServerError, ServerErrorExt};
+use lib_utils::error::{ServerError, ServerErrorExt, TError};
 
 pub type ServiceResult<T> = Result<T, anyhow::Error>;
-
-pub trait ServiceResultIntoResponse<T> {
-    fn into_response(self) -> axum::response::Response;
-}
-
-impl<T: Serialize> ServiceResultIntoResponse<T> for ServiceResult<T> {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            Ok(data) => GeneralResponse {
-                code: 0,
-                message: "".to_string(),
-                ttl: 1,
-                data: Some(data),
-            }
-            .into_response(),
-            Err(err) => ServerErrorExt::from(err).into_response(),
-        }
-    }
-}
 
 pub type HandlerFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = axum::response::Response> + Send>>;
@@ -57,44 +38,72 @@ impl<T: Serialize> Default for GeneralResponse<T> {
 
 impl<T: Serialize> IntoResponse for GeneralResponse<T> {
     fn into_response(self) -> axum::response::Response {
-        let mut buf = BytesMut::with_capacity(128).writer();
-        match serde_json::to_writer(&mut buf, &self) {
-            Ok(()) => (
-                [(
-                    header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/json"),
-                )],
-                buf.into_inner().freeze(),
-            )
-                .into_response(),
-            Err(err) => {
-                error!("serde_json::to_writer error: {}", err);
-                ServerError::Serialization.into_response()
-            }
-        }
+        self.into_response(false)
     }
 }
 
-impl<T: Serialize> From<T> for GeneralResponse<T> {
-    fn from(value: T) -> Self {
+impl<T: Serialize> GeneralResponse<T> {
+    /// Create a new [GeneralResponse] with data.
+    pub fn new(data: T) -> Self {
         Self {
-            data: Some(value),
+            data: Some(data),
             ..Default::default()
         }
     }
+
+    /// Create a new [GeneralResponse] from [ServiceResult<T>]
+    pub fn new_from_result(service_result: ServiceResult<T>) -> Self {
+        match service_result {
+            Ok(data) => Self::new(data),
+            Err(err) => {
+                let err = ServerErrorExt::from(err);
+                Self {
+                    code: err.e_code(),
+                    message: err.e_message().to_string(),
+                    ..Default::default()
+                }
+            }
+        }
+    }
+
+    /// Customly implement [IntoResponse] for [GeneralResponse<T>].
+    ///
+    /// For historical reason, sometimes non standard response with only `data` is required.
+    pub fn into_response(self, data_only: bool) -> axum::response::Response {
+        let mut buf = BytesMut::with_capacity(128).writer();
+        if data_only && self.code == 0 {
+            serde_json::to_writer(&mut buf, &self.data)
+        } else {
+            serde_json::to_writer(&mut buf, &self)
+        }
+        .map_or_else(
+            |e| {
+                error!("serde_json::to_writer error: {}", e);
+                ServerError::Serialization.into_response()
+            },
+            |_| {
+                (
+                    [(
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/json"),
+                    )],
+                    buf.into_inner().freeze(),
+                )
+                    .into_response()
+            },
+        )
+    }
 }
 
-// impl<T: Serialize> GeneralResponse<T> {
-//     pub fn into_inner(self) -> Result<T> {
-//         match self.data {
-//             Some(data) => Ok(data),
-//             None => Err(GeneralError {
-//                 code: self.code,
-//                 message: self.message,
-//             }),
-//         }
-//     }
-// }
+#[macro_export]
+macro_rules! axum_response {
+    ($result:expr) => {
+        GeneralResponse::new_from_result($result).into_response(false)
+    };
+    ($result:expr, $data_only:expr) => {
+        GeneralResponse::new_from_result($result).into_response($data_only)
+    };
+}
 
 #[derive(Clone)]
 pub struct DefaultHandler;
@@ -132,7 +141,7 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
 
     fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
         Box::pin(async move {
-            match req.uri().path() {
+            let data = match req.uri().path() {
                 "/ok_empty" => Ok("ok_empty"),
                 "/fatal" => Err(anyhow!(ServerError::ServerFatal)),
                 "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any {
@@ -149,8 +158,8 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
                     error!("req.uri().path(): {}", req.uri().path());
                     Err(anyhow!(ServerError::ServerInternalNotImpl))
                 }
-            }
-            .into_response()
+            };
+            GeneralResponse::new_from_result(data).into_response(false)
         })
     }
 }

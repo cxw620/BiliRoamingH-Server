@@ -1,8 +1,8 @@
-use axum::{response::IntoResponse, routing::MethodRouter, Json};
+use axum::routing::MethodRouter;
 use serde_json::json;
 
-use super::{HandlerFuture, ServiceResult, ServiceResultIntoResponse};
-use lib_utils::{error::ServerErrorExt, url::QueryMap};
+use super::{axum_response, GeneralResponse, HandlerFuture, ServiceResult};
+use lib_utils::url::QueryMap;
 
 pub struct PlayurlRouter;
 
@@ -41,19 +41,18 @@ where
         Box::pin(async move {
             let res = self.get_playurl(req).await;
             match self {
-                // For historical reason, app only accept non standard response with only `data`
-                Self::PgcPlayerApi => res.map_or_else(
-                    |e| ServerErrorExt::from(e).into_response(),
-                    |v| Json(v).into_response(),
-                ),
-                _ => res.into_response(),
+                Self::PgcPlayerApi => axum_response!(res, true),
+                _ => axum_response!(res),
             }
         })
     }
 }
 
 impl PlayurlHandler {
-    pub async fn get_playurl(&self, req: axum::extract::Request) -> ServiceResult<serde_json::Value> {
+    pub async fn get_playurl(
+        &self,
+        req: axum::extract::Request,
+    ) -> ServiceResult<serde_json::Value> {
         let query_map = QueryMap::try_from_req(&req)?;
         // TODO implement get playurl
         Ok(json!({
