@@ -7,6 +7,7 @@ rust-version = "1.75"
 [dependencies]
 anyhow = "1.0"
 axum = "0.7"
+bytes = "1.5"
 http = "1.0"
 lib_utils = { path = "../libs/lib-utils" }
 serde = { version = "1.0", features = ["derive"] }

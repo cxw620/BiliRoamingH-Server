@@ -2,6 +2,8 @@ pub mod playurl;
 
 use anyhow::anyhow;
 use axum::response::IntoResponse;
+use bytes::{BufMut, BytesMut};
+use http::{header, HeaderValue};
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
@@ -45,8 +47,8 @@ pub struct GeneralResponse<T: Serialize> {
 impl<T: Serialize> Default for GeneralResponse<T> {
     fn default() -> Self {
         Self {
-            code: -500,
-            message: "Default JSON Response".to_string(),
+            code: 0,
+            message: String::new(),
             ttl: 1,
             data: None,
         }
@@ -55,12 +57,21 @@ impl<T: Serialize> Default for GeneralResponse<T> {
 
 impl<T: Serialize> IntoResponse for GeneralResponse<T> {
     fn into_response(self) -> axum::response::Response {
-        let mut res = serde_json::to_string(&self).unwrap().into_response();
-        res.headers_mut().insert(
-            http::header::CONTENT_TYPE,
-            http::HeaderValue::from_static("application/json"),
-        );
-        res
+        let mut buf = BytesMut::with_capacity(128).writer();
+        match serde_json::to_writer(&mut buf, &self) {
+            Ok(()) => (
+                [(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )],
+                buf.into_inner().freeze(),
+            )
+                .into_response(),
+            Err(err) => {
+                error!("serde_json::to_writer error: {}", err);
+                ServerError::Serialization.into_response()
+            }
+        }
     }
 }
 
