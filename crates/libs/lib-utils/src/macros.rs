@@ -50,6 +50,49 @@ macro_rules! encode_grpc_header_bin {
 }
 
 #[macro_export]
+/// Parse gRPC Message
+///
+/// Param: `&[u8]`, type path of struct
+macro_rules! parse_grpc_any {
+    ($u8:expr, $struct:path) => {{
+        let req_grpc_metadata: $struct = prost::Message::decode($u8).unwrap();
+        req_grpc_metadata
+    }};
+}
+
+#[macro_export]
+/// 解析 Binary 类型 gRPC MetadataValue.
+macro_rules! parse_grpc_header_bin {
+    ($struct:path, $base64_value:expr) => {{
+        let req_grpc_metadata_bin = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD_NO_PAD,
+            $base64_value,
+        )
+        .unwrap();
+        // ? 相对应地可以encode
+        let req_grpc_metadata: $struct =
+            prost::Message::decode(req_grpc_metadata_bin.as_slice()).unwrap();
+        req_grpc_metadata
+    }};
+    ($bin_name:expr, $struct:path, $request:expr) => {{
+        let req_grpc_metadata_bin = $request
+            .metadata()
+            .get_bin($bin_name)
+            .unwrap()
+            .as_encoded_bytes();
+        let req_grpc_metadata_bin = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD_NO_PAD,
+            req_grpc_metadata_bin,
+        )
+        .unwrap();
+        // ? 相对应地可以encode
+        let req_grpc_metadata: $struct =
+            prost::Message::decode(req_grpc_metadata_bin.as_slice()).unwrap();
+        req_grpc_metadata
+    }};
+}
+
+#[macro_export]
 /// Faster way to get current timestamp other than `chrono::Local::now().timestamp()`,
 /// 12x faster on my machine.
 ///

@@ -12,6 +12,7 @@ axum = { version = "0.7", default-features = false }
 fluent-uri = "0.1.4"
 hmac = "0.12"
 http = "1.0"
+lib_bilibili = { path = "../lib-bilibili" }
 md-5 = "0.10.6"
 num_enum = "0.7"
 prost = "0.12"
@@ -20,6 +21,7 @@ rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 thiserror = "1.0"
+tonic = { version = "0.10", default-features = false, features = [] }
 tracing = "0.1"
 urlencoding = "2.1"
 
