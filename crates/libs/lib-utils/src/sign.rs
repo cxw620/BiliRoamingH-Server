@@ -1,14 +1,80 @@
-use std::borrow::Cow;
+use crate::{calc_md5, str_concat};
+use anyhow::{bail, Result};
+use thiserror::Error;
 
-#[derive(Debug)]
-pub enum Signer {
-    None,
+#[derive(Debug, Error)]
+pub enum SignErr {
+    #[error("Invalid wbi key, length not 64")]
+    InvalidWbiKey,
+    // #[error("Unknown appkey {0}, corresponding appsec not found")]
+    // UnknownAppkey(String),
 }
 
-impl Signer {
-    pub fn sign<'q>(&self, _params: &mut Vec<(&'q str, Cow<'q, str>)>) -> String {
-        todo!()
+#[derive(Debug)]
+pub enum Signer<'s> {
+    None,
+    Wbi { img_key: &'s str, sub_key: &'s str },
+}
+
+/// WBI Sign implementation V1.0.2
+///
+/// Last updated: 24-01-25 15:20
+pub struct Wbi;
+
+impl Wbi {
+    #[inline]
+    pub fn gen_mixin_key(img_key: &str, sub_key: &str) -> Result<String> {
+        let wbi_key = str_concat!(img_key, sub_key);
+        if wbi_key.len() != 64 {
+            // TODO Request upstream for new one
+            bail!(SignErr::InvalidWbiKey);
+        }
+
+        const MIXIN_KEY_ENC_TAB: [u8; 64] = [
+            46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42,
+            19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60,
+            51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+        ];
+
+        let wbi_key_bytes = wbi_key.as_bytes();
+        let mut mixin_key = {
+            let binding = MIXIN_KEY_ENC_TAB
+                .iter()
+                .map(|n| wbi_key_bytes[*n as usize])
+                .collect::<Vec<u8>>();
+            // SAFE: `binding` is guaranteed to be valid UTF-8
+            unsafe { String::from_utf8_unchecked(binding) }
+        };
+
+        mixin_key.truncate(32);
+
+        Ok(mixin_key)
     }
+
+    /// Calculate `w_rid` param value.
+    ///
+    /// Pass `sorted_params` with `wts` and `mixin_key` to this function.
+    #[inline]
+    pub fn gen_w_rid(sorted_params: &str, mixin_key: &str) -> String {
+        calc_md5!(str_concat!(&sorted_params, &mixin_key))
+    }
+
+    // For future use.
+    // fn swap_string(input: &str, t: u32) -> String {
+    //     if input.len() % 2 != 0 {
+    //         return input.to_owned();
+    //     }
+    //     if t == 0 {
+    //         return input.to_owned();
+    //     }
+    //     if input.len() == 2u32.pow(t) as usize {
+    //         return input.chars().rev().collect();
+    //     }
+    //     let mid = input.len() / 2;
+    //     let r = &input[..mid];
+    //     let n = &input[mid..];
+    //     str_concat!(&Self::swap_string(n, t - 1), &Self::swap_string(r, t - 1))
+    // }
 }
 
 type HmacSha256 = hmac::Hmac<sha2::Sha256>;

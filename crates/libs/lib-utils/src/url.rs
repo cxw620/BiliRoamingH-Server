@@ -2,12 +2,13 @@ use anyhow::Result;
 use std::borrow::Cow;
 
 use super::error::ServerError;
-use super::sign::Signer;
+use super::sign::{Signer, Wbi};
+use crate::{now, str_concat};
 
 #[derive(Debug)]
 pub struct QueryBuilder<'q> {
     parameters: Vec<(&'q str, Cow<'q, str>)>,
-    signer: Signer,
+    signer: Signer<'q>,
     need_sort: bool,
 }
 
@@ -31,55 +32,84 @@ impl<'q> QueryBuilder<'q> {
     }
 
     /// Set signer.
-    pub fn with_signer(&mut self, signer: Signer) -> &mut Self {
+    pub fn with_signer(mut self, signer: Signer<'q>) -> Self {
         self.signer = signer;
         self
     }
 
     /// Set if need sort when building query string.
-    pub fn with_sort(&mut self, need_sort: bool) -> &mut Self {
+    ///
+    /// May not take effect when need sign.
+    pub fn with_sort(mut self, need_sort: bool) -> Self {
         self.need_sort = need_sort;
         self
     }
 
     /// Add a new parameter.
-    pub fn add_param(&mut self, k: &'q str, v: impl Into<Cow<'q, str>>) -> &mut Self {
+    pub fn add_param(mut self, k: &'q str, v: impl Into<Cow<'q, str>>) -> Self {
         self.parameters.push((k, v.into()));
         self
     }
 
     /// Add new parameters.
-    pub fn add_params(&mut self, params: Vec<(&'q str, Cow<'q, str>)>) -> &mut Self {
+    pub fn add_params(mut self, params: Vec<(&'q str, Cow<'q, str>)>) -> Self {
         self.parameters.extend(params);
-        self
-    }
-
-    /// Sort parameters **in place** by key instantly.
-    pub fn sort_params(&mut self, need_sort: bool) -> &mut Self {
-        if need_sort {
-            sort_parameters(&mut self.parameters);
-        }
-        self
-    }
-
-    /// Sign the query and add sign parameter to `self.parameters`.
-    ///
-    /// See [`Signer`] for details.
-    pub fn sign(&mut self) -> &mut Self {
-        self.signer.sign(&mut self.parameters);
         self
     }
 
     /// Build query string.
     ///
-    /// DO NOT use original builder after calling this method,
-    /// since that `self.parameters` has been already consumed.
-    pub fn build(&mut self) -> String {
-        // Using `std::mem::take` is not good since the used builder should be dropped instead of
-        // replaced with a new one, though we cannot do so behind a shared reference.
-        // Compromise for chain calling?
-        let params = std::mem::take(&mut self.parameters);
-        encode_parameters(params, self.need_sort)
+    /// May failed due to sign error.
+    pub fn build(mut self) -> Result<String> {
+        match self.signer {
+            Signer::None => {
+                let mut params = std::mem::take(&mut self.parameters);
+                Ok(encode_parameters(&mut params, self.need_sort))
+            }
+            Signer::Wbi { img_key, sub_key } => {
+                let mixin_key = Wbi::gen_mixin_key(img_key, sub_key)?;
+
+                let wts = if cfg!(test) {
+                    "1703513649".to_owned()
+                } else {
+                    now!().as_secs().to_string()
+                };
+
+                let wts_param = str_concat!("wts=", &wts);
+                self.parameters.push(("wts", wts.into()));
+
+                let unsigned_query = encode_parameters(&mut self.parameters, true);
+
+                let w_rid = Wbi::gen_w_rid(&unsigned_query, &mixin_key);
+
+                // `wts`, `w_rid` should add to the end of unsigned query.
+                // With this we needn't encode parameters twice.
+                let signed_query = {
+                    // `wts_param` will and will only appear once in unsigned_query
+                    let (mut start, part) =
+                        unsigned_query.match_indices(&wts_param).next().unwrap();
+                    let mut part_len = part.len();
+                    // `start` > 0 then not the first, should also remove `&` before `wts`
+                    if start != 0 {
+                        start -= 1;
+                        part_len += 1;
+                    }
+                    // SAFE: Will not out of bound
+                    str_concat!(
+                        unsafe { unsigned_query.get_unchecked(0..start) },
+                        unsafe {
+                            unsigned_query.get_unchecked((start + part_len)..unsigned_query.len())
+                        },
+                        "&w_rid=",
+                        &w_rid,
+                        "&",
+                        &wts_param
+                    )
+                };
+
+                Ok(signed_query)
+            }
+        }
     }
 }
 
@@ -93,14 +123,14 @@ impl<'q> QueryBuilder<'q> {
 ///   if you need the original one.
 #[inline]
 pub fn encode_parameters<'q>(
-    mut parameters: Vec<(&'q str, Cow<'q, str>)>,
+    parameters: &mut Vec<(&'q str, Cow<'q, str>)>,
     need_sort: bool,
 ) -> String {
     if need_sort {
-        sort_parameters(&mut parameters);
+        sort_parameters(parameters);
     }
     let mut parameters_str = String::with_capacity(256);
-    parameters.into_iter().for_each(|(k, v)| {
+    parameters.iter().for_each(|(k, v)| {
         parameters_str.push_str(k);
         parameters_str.push('=');
         parameters_str.push_str(&urlencoding::encode(v.as_ref()));
@@ -110,7 +140,7 @@ pub fn encode_parameters<'q>(
     parameters_str
 }
 
-#[inline]
+#[inline(always)]
 /// Sort parameters **in place** by key.
 pub fn sort_parameters(parameters: &mut Vec<(&str, Cow<'_, str>)>) {
     parameters.sort_unstable_by_key(|param| param.0);
@@ -122,8 +152,31 @@ pub mod test {
 
     #[test]
     fn test_encode_space() {
-        let params = vec![("a", "b c".into()), ("c", "d".into())];
-        assert_eq!(encode_parameters(params, false), "a=b%20c&c=d");
+        let mut params = vec![("a", "b c".into()), ("c", "d".into())];
+        assert_eq!(encode_parameters(&mut params, false), "a=b%20c&c=d");
+    }
+
+    #[test]
+    fn test_wbi_sign() {
+        const IMG_KEY: &'static str = "7cd084941338484aae1ad9425b84077c";
+        const SUB_KEY: &'static str = "4932caff0ff746eab6f01bf08b70ac45";
+
+        let parameters = vec![
+            ("mid", "11997177".into()),
+            ("token", "".into()),
+            ("platform", "web".into()),
+            ("web_location", "1550101".into()),
+        ];
+
+        let signed_url = QueryBuilder::new(parameters)
+            .with_signer(Signer::Wbi {
+                img_key: IMG_KEY,
+                sub_key: SUB_KEY,
+            })
+            .build()
+            .unwrap();
+
+        assert_eq!(signed_url, "mid=11997177&platform=web&token=&web_location=1550101&w_rid=7d4428b3f2f9ee2811e116ec6fd41a4f&wts=1703513649");
     }
 }
 
