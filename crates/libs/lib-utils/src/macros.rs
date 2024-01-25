@@ -12,6 +12,34 @@ macro_rules! str_concat {
 }
 
 #[macro_export]
+/// Base64 decode
+/// # Param: 
+///  + `data`
+///  + `padding`: `base64::engine::general_purpose::{}`, `STANDARD`(default) / `STANDARD_NO_PAD` / `URL_SAFE` / `URL_SAFE_NO_PAD`
+macro_rules! b64_encode {
+    ($data:expr) => {
+        b64_encode!($data, base64::engine::general_purpose::STANDARD)
+    };
+    ($data:expr, $padding:path) => {
+        base64::Engine::encode(&$padding, $data)
+    };
+}
+
+#[macro_export]
+/// Base64 decode
+/// # Param: 
+///  + `data`
+///  + `padding`: `base64::engine::general_purpose::{}`, `STANDARD`(default) / `STANDARD_NO_PAD` / `URL_SAFE` / `URL_SAFE_NO_PAD`
+macro_rules! b64_decode {
+    ($data:expr) => {
+        b64_decode!($data, base64::engine::general_purpose::STANDARD)
+    };
+    ($data:expr, $padding:path) => {
+        base64::Engine::decode(&$padding, $data)
+    };
+}
+
+#[macro_export]
 macro_rules! calc_md5 {
     ($input_str: expr) => {{
         // let mut md5_instance = crypto::md5::Md5::new();

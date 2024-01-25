@@ -2,6 +2,7 @@ use crate::{calc_md5, str_concat};
 use anyhow::{bail, Result};
 use thiserror::Error;
 
+// TODO Internal error
 #[derive(Debug, Error)]
 pub enum SignErr {
     #[error("Invalid wbi key, length not 64")]

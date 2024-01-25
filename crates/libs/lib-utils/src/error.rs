@@ -350,6 +350,11 @@ impl From<anyhow::Error> for ServerErrorExt {
         if let Some(bili_error) = e.downcast_ref::<BiliError>() {
             return (bili_error.to_owned()).into();
         }
+        if let Some(header_error) = e.downcast_ref::<HeaderError>() {
+            // TODO: Trace error using open-telemetry here
+            error!("Detect HeaderError: {:?}", header_error);
+            return Self::Server(ServerError::General);
+        }
         Self::Any { source: e }
     }
 }
@@ -625,4 +630,26 @@ impl From<tonic::Status> for ServerErrorExt {
             _ => Self::Server(ServerError::from(grpc_code as i64 + 5_502_900)),
         }
     }
+}
+
+// The following are internal errors, should not exposed to user.
+
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+/// HeaderError
+/// 
+/// **Internal error, should not exposed to user**
+pub(crate) enum HeaderError {
+    #[error("Key [{0}] not exist")]
+    KeyNotExist(String),
+    #[error("Base64DecodeError {e}: Key [{key}] => Value [{value}]")]
+    Base64DecodeError {
+        key: String,
+        value: String,
+        e: base64::DecodeError,
+    },
+    #[error(transparent)]
+    ToStrError(#[from] http::header::ToStrError),
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
 }

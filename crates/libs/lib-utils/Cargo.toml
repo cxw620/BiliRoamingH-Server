@@ -8,10 +8,11 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 axum = { version = "0.7", default-features = false }
+base64 = "0.21"
 # const-hex = "1"
 fluent-uri = "0.1.4"
 hmac = "0.12"
-http = "1.0"
+http = "0.2.11" # Use http 0.2 temporarily, because tonic 0.10 depends on it.
 lib_bilibili = { path = "../lib-bilibili" }
 md-5 = "0.10.6"
 num_enum = "0.7"
