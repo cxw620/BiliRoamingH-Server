@@ -1,3 +1,4 @@
+mod model;
 pub mod playurl;
 
 use anyhow::anyhow;
