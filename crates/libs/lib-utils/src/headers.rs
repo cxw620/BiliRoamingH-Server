@@ -445,7 +445,7 @@ pub fn gen_trace_id() -> String {
     random_trace_id.push_str(&random_id[0..24]);
 
     let mut b_arr: [i8; 3] = [0i8; 3];
-    let mut ts = now!().as_secs();
+    let mut ts = now!().as_secs() as i128;
     for i in (0..3).rev() {
         ts >>= 8;
         b_arr[i] = {
