@@ -12,6 +12,7 @@ members = [
     "crates/libs/lib-core",
     "crates/libs/lib-rpc",
     "crates/libs/lib-utils",
+    "crates/libs/lib-rpc-client",
 
     # -- Services
     "crates/services",
@@ -33,3 +34,7 @@ services ={ path = "crates/services"}
 tokio = { version = "1.35", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+[patch.crates-io]
+reqwest = { git = 'https://github.com/cxw620/lib_reqwest.git', rev = 'ed9dbc7649f53cd18b5bdfe88173064c95bd6b78' }
+# tonic = { path = 'D:\LocalDevelop\LocalRepo\Dependence\tonic\tonic' }
