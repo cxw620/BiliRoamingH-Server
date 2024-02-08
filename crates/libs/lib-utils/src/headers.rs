@@ -125,7 +125,7 @@ pub trait BiliHeaderT {
     fn set_access_key(&mut self, access_key: &str) -> &mut Self {
         self.set(
             HeaderKey::Authorization,
-            &str_concat!("identify_v1 {}", access_key),
+            &str_concat!("identify_v1 ", access_key),
         )
     }
     /// Set `app-key`
@@ -153,6 +153,21 @@ pub trait BiliHeaderT {
     fn set_mid(&mut self, mid: u64) -> &mut Self {
         self.set(HeaderKey::BiliMid, &mid.to_string())
             .set(HeaderKey::BiliAuroraEid, &gen_aurora_eid(mid).unwrap())
+    }
+    /// Set `x-bili-ticket` if given
+    fn set_ticket(&mut self, ticket: Option<&str>) -> &mut Self {
+        if let Some(ticket) = ticket {
+            self.set(HeaderKey::BiliTicket, ticket)
+        } else {
+            self
+        }
+    }
+    /// Set `user-agent`, if given None then use default
+    fn set_user_agent(&mut self, user_agent: Option<&str>) -> &mut Self {
+        self.set(
+            HeaderKey::UserAgent,
+            user_agent.unwrap_or(user_agent::FakeUA::UA_APP_DEFAULT),
+        )
     }
     /// Set `x-bili-metadata-bin`
     fn set_metadata_bin(&mut self, metadata: Metadata) -> &mut Self {
@@ -194,7 +209,7 @@ pub trait BiliHeaderT {
 }
 
 /// United `http::HeaderMap` wrapper for both `reqwest` & `tonic`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ManagedHeaderMap {
     inner: http::HeaderMap,
     // Set if it's gRPC Metadata
@@ -292,6 +307,12 @@ impl ManagedHeaderMap {
         })
     }
 
+    #[inline]
+    /// Check if key exist
+    pub fn contains_key(&self, key: HeaderKey) -> bool {
+        self.inner.contains_key(key.str())
+    }
+
     /// Insert gRPC ascii type Metadata or general http header
     ///
     /// # Panics(debug)
@@ -380,31 +401,61 @@ impl ManagedHeaderMap {
     ///
     /// Not setting any possible header will cause runtime panics.
     fn verify(&self) {
-        debug_assert!(self.get(HeaderKey::Env).is_ok());
-        debug_assert!(self.get(HeaderKey::AppkeyName).is_ok());
-        // Always should not forget to set `user-agent`
-        assert!(self.get(HeaderKey::UserAgent).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliTraceId).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliAuroraEid).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliMid).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliAuroraZone).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliTicket).is_ok());
-        debug_assert!(self.get(HeaderKey::Buvid).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliGaiaVtoken).is_ok());
-        debug_assert!(self.get(HeaderKey::BiliHttpEngine).is_ok());
-        debug_assert!(self.get(HeaderKey::FpLocal).is_ok());
-        // debug_assert!(self.get(HeaderKey::FpRemote).is_ok());
-        debug_assert!(self.get(HeaderKey::SessionId).is_ok());
-        // Only when logged in `authorization` should be set
-        // debug_assert!(self.is_metadata && self.get(HeaderKey::Authorization).is_ok());
-        // Always should not forget to set `x-bili-metadata-bin`
-        assert!(self.is_metadata && self.get_bin(HeaderKey::BiliMetadataBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliDeviceBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliNetworkBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliRestrictionBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliLocaleBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliExpsBin).is_ok());
-        debug_assert!(self.is_metadata && self.get_bin(HeaderKey::BiliFawkesReqBin).is_ok());
+        macro_rules! check_if_exist {
+            ($key:expr) => {
+                if (!self.contains_key($key)) {
+                    warn!("Header [{}] is not set", $key.str())
+                }
+            };
+            ($precondition:expr, $key:expr) => {
+                if ($precondition && !self.contains_key($key)) {
+                    warn!("Header [{}] is not set", $key.str())
+                }
+            };
+        }
+        macro_rules! check_if_exist_or_panic {
+            ($key:expr) => {
+                if !self.contains_key($key) {
+                    if cfg!(debug_assertions) {
+                        panic!("Header [{}] is not set", $key.str())
+                    } else {
+                        warn!("Header [{}] is not set", $key.str())
+                    }
+                }
+            };
+            ($precondition:expr, $key:expr) => {
+                if ($precondition && !self.contains_key($key)) {
+                    if cfg!(debug_assertions) {
+                        panic!("Header [{}] is not set", $key.str())
+                    } else {
+                        warn!("Header [{}] is not set", $key.str())
+                    }
+                }
+            };
+        }
+
+        check_if_exist!(HeaderKey::Env);
+        check_if_exist!(HeaderKey::AppkeyName);
+        check_if_exist_or_panic!(HeaderKey::UserAgent);
+        check_if_exist!(HeaderKey::BiliTraceId);
+        check_if_exist!(HeaderKey::BiliAuroraEid);
+        check_if_exist!(HeaderKey::BiliMid);
+        check_if_exist!(HeaderKey::BiliAuroraZone);
+        check_if_exist!(HeaderKey::BiliTicket);
+        check_if_exist!(HeaderKey::Buvid);
+        check_if_exist!(HeaderKey::BiliGaiaVtoken);
+        check_if_exist!(HeaderKey::BiliHttpEngine);
+        check_if_exist!(HeaderKey::FpLocal);
+        check_if_exist!(HeaderKey::FpRemote);
+        check_if_exist!(HeaderKey::SessionId);
+        check_if_exist!(HeaderKey::Authorization);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliMetadataBin);
+        check_if_exist_or_panic!(self.is_metadata, HeaderKey::BiliDeviceBin);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliNetworkBin);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliRestrictionBin);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliLocaleBin);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliExpsBin);
+        check_if_exist!(self.is_metadata, HeaderKey::BiliFawkesReqBin);
     }
 
     #[inline]
@@ -428,9 +479,28 @@ impl BiliHeaderT for ManagedHeaderMap {
 
 impl tonic::service::Interceptor for ManagedHeaderMap {
     fn call(&mut self, request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
-        let (_, extensions, message) = request.into_parts();
-        let metadata = MetadataMap::from_headers(self.take_inner());
-        Ok(tonic::Request::from_parts(metadata, extensions, message))
+        let (metadata_original, extensions, message) = request.into_parts();
+        let header_map_original = metadata_original.into_headers();
+
+        let mut header_map = self.take_inner();
+        if let Some(encoding) = header_map_original.get("grpc-encoding") {
+            header_map.insert("grpc-encoding", encoding.clone());
+        }
+        if let Some(accept_encoding) = header_map_original.get("grpc-accept-encoding") {
+            header_map.insert("grpc-accept-encoding", accept_encoding.clone());
+        }
+
+        Ok(tonic::Request::from_parts(
+            MetadataMap::from_headers(header_map),
+            extensions,
+            message,
+        ))
+    }
+}
+
+impl Into<tonic::metadata::MetadataMap> for ManagedHeaderMap {
+    fn into(mut self) -> tonic::metadata::MetadataMap {
+        MetadataMap::from_headers(self.take_inner())
     }
 }
 
@@ -513,5 +583,249 @@ mod test {
         headers.insert(super::HeaderKey::Authorization, "");
 
         println!("{:?}", headers.take_inner())
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) mod user_agent {
+    use crate::str_concat;
+    use rand::Rng;
+    use std::fmt::Write;
+    use tracing::error;
+
+    pub trait TUserAgent {
+        fn web(&self) -> String;
+        fn mobile(&self) -> String;
+        fn dalvik(&self) -> String;
+        fn bili_app(&self) -> String;
+    }
+
+    pub struct UniteUA {
+        app_build: String,
+        app_ver: String,
+        mobi_app: String,
+        os_ver: String,
+        network: String,
+        ua_device_model: String,
+        ua_device_build: String,
+    }
+
+    impl Default for UniteUA {
+        fn default() -> Self {
+            Self {
+                app_build: FakeUA::APP_BUILD_DEFAULT.to_owned(),
+                app_ver: FakeUA::APP_VER_DEFAULT.to_owned(),
+                mobi_app: FakeUA::MOBI_APP_DEFAULT.to_owned(),
+                os_ver: FakeUA::OS_VER_DEFAULT.to_owned(),
+                network: FakeUA::NETWORK_DEFAULT.to_owned(),
+                ua_device_model: FakeUA::DEVICE_MODEL_DEFAULT.to_owned(),
+                ua_device_build: FakeUA::DEVICE_BUILD_DEFAULT.to_owned(),
+            }
+        }
+    }
+
+    impl TUserAgent for UniteUA {
+        fn web(&self) -> String {
+            FakeUA::UA_WEB_DEFAULT.to_owned()
+        }
+        fn mobile(&self) -> String {
+            str_concat!(
+                "Mozilla/5.0 (Linux; U; Android ",
+                &self.os_ver,
+                "; ",
+                &self.ua_device_model,
+                " Build/",
+                &self.ua_device_build,
+                ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+            )
+        }
+        fn dalvik(&self) -> String {
+            str_concat!(
+                "Dalvik/2.1.0 (Linux; U; Android ",
+                &self.os_ver,
+                "; ",
+                &self.ua_device_model,
+                " Build/",
+                &self.ua_device_build,
+                ") ",
+                &self.app_ver,
+                " os/android model/",
+                &self.ua_device_model,
+                " mobi_app/",
+                &self.mobi_app,
+                " build/",
+                &self.app_build,
+                " channel/master innerVer/",
+                &self.app_build,
+                " osVer/",
+                &self.os_ver,
+                " network/",
+                &self.network
+            )
+        }
+        fn bili_app(&self) -> String {
+            str_concat!(
+                "Mozilla/5.0 BiliDroid/",
+                &self.app_ver,
+                " (bbcallen@gmail.com) os/android model/",
+                &self.ua_device_model,
+                " mobi_app/",
+                &self.mobi_app,
+                " build/",
+                &self.app_build,
+                " channel/master innerVer/",
+                &self.app_build,
+                " osVer/",
+                &self.os_ver,
+                " network/",
+                &self.network
+            )
+        }
+    }
+
+    pub struct UniteUABuilder {
+        inner: UniteUA,
+    }
+
+    impl Default for UniteUABuilder {
+        fn default() -> Self {
+            Self {
+                inner: UniteUA::default(),
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    impl UniteUABuilder {
+        pub fn new() -> Self {
+            Self::default()
+        }
+        /// Generate a random UA
+        pub fn gen_fake_ua(&mut self) -> &mut Self {
+            let (os_ver, device_model, device_build) = FakeUA::gen_random_phone();
+            self.inner.os_ver = os_ver.to_owned();
+            self.inner.ua_device_model = device_model.to_owned();
+            self.inner.ua_device_build = device_build.to_owned();
+            self
+        }
+        /// Set Bilibili APP Build, will **also** set APP Version
+        pub fn set_app_build(&mut self, app_build: impl Into<String>) -> &mut Self {
+            let app_build = app_build.into();
+            if app_build.len() != 7 {
+                error!(target: "UniteUA", "Invalid Bilibili APP Build: {}", app_build);
+                return self;
+            }
+            let mut app_ver = String::with_capacity(16);
+            write!(
+                app_ver,
+                "{}.{}.{}",
+                &app_build[0..1],
+                app_build[1..3].parse::<u8>().unwrap_or(38),
+                &app_build[3..4],
+            )
+            .unwrap();
+            self.inner.app_build = app_build;
+            self.inner.app_ver = app_ver;
+            self
+        }
+        /// Set Bilibili APP Version, will **also** set APP Build
+        pub fn set_app_ver(&mut self, app_ver: impl Into<String>) -> &mut Self {
+            let app_ver: String = app_ver.into();
+            let app_build_vec: Vec<&str> = app_ver.split(".").collect();
+            if app_build_vec.len() < 3 {
+                error!(target: "UniteUA", "Invalid Bilibili APP Version: {}", app_ver);
+                return self;
+            }
+            let mut app_build = String::with_capacity(16);
+            write!(
+                app_build,
+                "{}{:02}{}300",
+                app_build_vec[0],
+                app_build_vec[1].parse::<u8>().unwrap_or(38),
+                app_build_vec[2],
+            )
+            .unwrap();
+            self.inner.app_build = app_build;
+            self.inner.app_ver = app_ver;
+            self
+        }
+        /// Set Bilibili mobi_app
+        pub fn set_mobi_app(&mut self, mobi_app: impl Into<String>) -> &mut Self {
+            self.inner.mobi_app = mobi_app.into();
+            self
+        }
+        /// Set Device OS Version
+        pub fn set_os_ver(&mut self, os_ver: impl Into<String>) -> &mut Self {
+            self.inner.os_ver = os_ver.into();
+            self
+        }
+        /// Set Device Network
+        pub fn set_network(&mut self, network: impl Into<String>) -> &mut Self {
+            self.inner.network = network.into();
+            self
+        }
+        /// Set Device Model
+        pub fn set_device_model(&mut self, device_model: impl Into<String>) -> &mut Self {
+            self.inner.ua_device_model = device_model.into();
+            self
+        }
+        /// Set Device Build
+        pub fn set_device_build(&mut self, device_build: impl Into<String>) -> &mut Self {
+            self.inner.ua_device_build = device_build.into();
+            self
+        }
+
+        pub fn build(&mut self) -> UniteUA {
+            std::mem::take(&mut self.inner)
+        }
+    }
+
+    impl From<UniteUA> for UniteUABuilder {
+        fn from(value: UniteUA) -> Self {
+            Self { inner: value }
+        }
+    }
+
+    pub enum FakeUA {
+        Web,                                 // 网页版, 统一使用 Chrome
+        Mobile,                              // 移动UA, 移动版 Chrome
+        Dalvik,                              //App的UA, Dalvik 开头的类型
+        BiliApp(&'static str, &'static str), //Bilibili 的 UA, 类似 Mozilla/5.0 BiliDroid/{6.80.0}{ (bbcallen@gmail.com) os/android model/M2012K11AC mobi_app/android build/6800300 channel/master innerVer/6800310 osVer/12 network/2
+    }
+
+    impl FakeUA {
+        pub const DEVICE_MODEL_DEFAULT: &'static str = "NOH-AN01";
+        pub const DEVICE_BUILD_DEFAULT: &'static str = "HUAWEINOH-AN01";
+        pub const APP_VER_DEFAULT: &'static str = "7.38.0";
+        pub const MOBI_APP_DEFAULT: &'static str = "android";
+        pub const APP_BUILD_DEFAULT: &'static str = "7380300";
+        pub const OS_VER_DEFAULT: &'static str = "12";
+        pub const NETWORK_DEFAULT: &'static str = "2";
+        pub const UA_WEB_DEFAULT: &'static str = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
+        pub const UA_MOBILE_DEFAULT: &'static str = "Mozilla/5.0 (Linux; U; Android 12; NOH-AN01 Build/HUAWEINOH-AN01) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36";
+        pub const UA_DALVIK_DEFAULT: &'static str = "Dalvik/2.1.0 (Linux; U; Android 12; NOH-AN01 Build/HUAWEINOH-AN01) 7.38.0 os/android model/NOH-AN01 mobi_app/android build/7380300 channel/master innerVer/7380300 osVer/12 network/2";
+        pub const UA_APP_DEFAULT: &'static str = "Mozilla/5.0 BiliDroid/7.38.0 (bbcallen@gmail.com) os/android model/NOH-AN01 mobi_app/android build/7380300 channel/master innerVer/7380310 osVer/12 network/2";
+
+        #[inline]
+        fn gen_random_phone() -> (&'static str, &'static str, &'static str) {
+            let phones = [
+                ("13", "Pixel 6 Pro", "TQ1A.221205.011"),
+                ("13", "SM-S9080", "TP1A.220624.014"),
+                ("13", "2201122C", "TKQ1.220807.001"),
+                ("12", "JEF-AN00", "HUAWEIJEF-AN00"),
+                ("12", "VOG-AL10", "HUAWEIVOG-AL10"),
+                ("12", "ELS-AN00", "HUAWEIELS-AN00"),
+                ("12", "NOH-AN01", "HUAWEINOH-AN01"),
+                ("11", "SKW-A0", "SKYW2203210CN00MR1"),
+                ("11", "21091116AC", "RP1A.200720.011"),
+                ("10", "VOG-AL10", "HUAWEIVOG-AL10"),
+                ("10", "JEF-AN00", "HUAWEIJEF-AN00"),
+                ("10", "VOG-AL10", "HUAWEIVOG-AL10"),
+                ("10", "ELS-AN00", "HUAWEIELS-AN00"),
+                ("9", "BND-AL10", "HONORBND-AL10"),
+                ("9", "ALP-AL00", "HUAWEIALP-AL00"),
+            ];
+            phones[rand::thread_rng().gen_range(0..=14)]
+        }
     }
 }
