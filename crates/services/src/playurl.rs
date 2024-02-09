@@ -62,3 +62,28 @@ impl PlayurlHandler {
         }))
     }
 }
+
+use lib_bilibili::bapis::app::playerunite::v1::{
+    player_server::Player, PlayViewUniteReply, PlayViewUniteReq,
+};
+
+#[derive(Debug, Default)]
+pub struct GrpcServerPlayerUniteV1;
+
+#[tonic::async_trait]
+impl Player for GrpcServerPlayerUniteV1 {
+    async fn play_view_unite(
+        &self,
+        request: tonic::Request<PlayViewUniteReq>,
+    ) -> std::result::Result<tonic::Response<PlayViewUniteReply>, tonic::Status> {
+        todo!()
+    }
+}
+
+async fn grpc_server_player_unite_v1(
+    req: tonic::Request<PlayViewUniteReq>,
+) -> anyhow::Result<tonic::Response<PlayViewUniteReply>> {
+    let reply = PlayViewUniteReply::default();
+    Ok(tonic::Response::new(reply))
+}
+
