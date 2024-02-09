@@ -38,7 +38,7 @@ pub(crate) type HttpConnector = hyper_014::client::HttpConnector;
 ///
 /// - If ProxyScheme::HTTP && dst.scheme() == Some(&Scheme::HTTP), no authorization header is set
 ///   since such work should be done in `Client` part originally in `reqwest` implementation.
-pub(crate) struct Connector {
+pub struct Connector {
     /// HTTP connector
     ///
     /// Presets:
@@ -347,7 +347,7 @@ pin_project! {
     /// This tells hyper_014 whether the URI should be written in
     /// * origin-form (`GET /just/a/path HTTP/1.1`), when `is_proxy == false`, or
     /// * absolute-form (`GET http://foo.bar/and/a/path HTTP/1.1`), otherwise.
-    pub(crate) struct Conn {
+    pub struct Conn {
         #[pin]
         inner: BoxConn,
         is_proxy: bool,
