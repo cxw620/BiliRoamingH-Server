@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-axum = { version = "0.7", default-features = false }
+axum = { version = "0.7", default-features = false, features = ["json"] }
 base64 = "0.21"
 # const-hex = "1"
 fluent-uri = "0.1.4"
