@@ -6,3 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Basic deps
+anyhow = "1"
+
+# Business deps
+tonic ={ version = "0.10", features = ["gzip"] }
+
+# Local deps
+lib_rpc_client = { path = "../lib-rpc-client" }
+lib_utils = { path = "../lib-utils" }
+
