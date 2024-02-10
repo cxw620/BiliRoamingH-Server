@@ -1,9 +1,17 @@
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
+use http_02::{HeaderMap as HttpHeaderMap, Method as HttpMethod};
 use reqwest::{Client, Proxy};
+use url::Url;
+
 use std::{sync::OnceLock, time::Duration};
 
-use crate::{CrateError, utils::RawResponseExt};
+use lib_utils::headers::ManagedHeaderMap;
+
+use crate::{
+    utils::{RawResponseExt, ResponseExt},
+    CrateError,
+};
 
 /// Clients with or without proxy
 static CLIENTS: OnceLock<DashMap<&'static str, reqwest::Client>> = OnceLock::new();
@@ -58,7 +66,7 @@ fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
 }
 
 /// Get reqwest::Client from CLIENTS cache or new one with given proxy
-async fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
+fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
     let clients = CLIENTS.get_or_init(|| {
         tracing::warn!("CLIENTS should be initialized before get_client!!!");
         let map = dashmap::DashMap::with_capacity(16);
@@ -93,77 +101,179 @@ async fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
     }
 }
 
-pub async fn get<T, H>(url: T, proxy: Option<&str>, headers: Option<H>) -> Result<RawResponseExt>
-where
-    T: TryInto<url::Url>,
-    T::Error: Into<url::ParseError>,
-    H: Into<reqwest::header::HeaderMap>,
-{
-    todo!()
+/// [`RestRequest`] with ideal method, url, headers and body.
+///
+/// **Recommended** Use [`RestRequestBuilder`] to build [`RestRequest`]
+pub struct RestRequest<'c> {
+    pub proxy: Option<&'c str>,
+    pub url: Url,
+    pub headers: Option<HttpHeaderMap>,
+    pub body: Option<reqwest::Body>,
 }
 
-pub async fn post<T, H, B>(
-    url: T,
-    proxy: Option<&str>,
-    headers: Option<H>,
-    body: Option<B>,
-) -> Result<RawResponseExt>
-where
-    T: TryInto<url::Url>,
-    T::Error: Into<url::ParseError>,
-    H: Into<reqwest::header::HeaderMap>,
-    B: Into<reqwest::Body>,
-{
-    todo!()
+impl<'c> RestRequest<'c> {
+    #[inline]
+    pub fn builder() -> RestRequestBuilder<'c> {
+        RestRequestBuilder::default()
+    }
+    /// GET request with given method, url, headers and body.
+    ///
+    /// Jsut a shortcut for `execute` a GET request
+    #[inline]
+    pub async fn get(self) -> Result<RawResponseExt> {
+        self.execute(HttpMethod::GET).await
+    }
+
+    /// POST request with given method, url, headers and body.
+    ///
+    /// Jsut a shortcut for `execute` a POST request
+    #[inline]
+    pub async fn post(self) -> Result<RawResponseExt> {
+        self.execute(HttpMethod::POST).await
+    }
+
+    /// Execute request with given method, url, headers and body.
+    pub async fn execute(self, method: HttpMethod) -> Result<RawResponseExt> {
+        let client = get_client(self.proxy)?;
+
+        let request = {
+            let mut r = reqwest::Request::new(method, self.url);
+            *r.headers_mut() = self
+                .headers
+                .unwrap_or_else(|| ManagedHeaderMap::new(false, false).take_inner());
+            *r.body_mut() = self.body;
+            r
+        };
+
+        // SAFE: body is not Stream
+        let response = client.execute(request.try_clone().unwrap()).await?;
+
+        Ok(ResponseExt::new(request, self.proxy, (), response))
+    }
+}
+
+#[derive(Default)]
+pub struct RestRequestBuilder<'r> {
+    proxy: Option<&'r str>,
+    url: Option<&'r str>,
+    headers: Option<HttpHeaderMap>,
+    body: Option<reqwest::Body>,
+}
+
+impl<'c> RestRequestBuilder<'c> {
+    /// Configure proxy for the request
+    #[inline]
+    pub fn proxy(mut self, proxy: Option<&'c str>) -> Self {
+        self.proxy = proxy;
+        self
+    }
+
+    /// Configure url for the request
+    #[inline]
+    pub fn url(mut self, url: &'c str) -> Self {
+        self.url = Some(url);
+        self
+    }
+
+    /// Configure headers for the request
+    ///
+    /// DO NOT pass expr `None` directly here, or you have to specify the type of Option<T>
+    #[inline]
+    pub fn headers(mut self, headers: Option<impl Into<HttpHeaderMap>>) -> Self {
+        self.headers = headers.map(|h| h.into());
+        self
+    }
+
+    /// Configure body for the request
+    ///
+    /// DO NOT pass expr `None` directly here, or you have to specify the type of Option<T>
+    #[inline]
+    pub fn body(mut self, body: Option<impl Into<reqwest::Body>>) -> Self {
+        self.body = body.map(|b| b.into());
+        self
+    }
+
+    /// Build RestRequest
+    #[inline]
+    pub fn build(self) -> Result<RestRequest<'c>> {
+        let url = self
+            .url
+            .expect("url is required for RestRequest")
+            .parse()
+            .map_err(|e| CrateError::from(e))?;
+
+        Ok(RestRequest {
+            proxy: self.proxy,
+            url,
+            headers: self.headers,
+            body: self.body,
+        })
+    }
 }
 
 #[cfg(test)]
 mod test {
     use std::time::Duration;
 
+    use lib_utils::headers::ManagedHeaderMap;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-    use crate::utils::ResponseExt;
-
     #[tokio::test]
-    async fn test() {
+    async fn test_keep_alive() {
         tracing_subscriber::registry().with(fmt::layer()).init();
 
-        let url = url::Url::try_from("https://api.bilibili.com/x/frontend/finger/spi").unwrap();
-        // let req = client.get(
-        //     url
-        // ).header("user-agent", "Dalvik/2.1.0 (Linux; U; Android 13; NOH-AN02 Build/HUAWEINOH-AN02) 7.9.0 os/android model/NOH-AN02 mobi_app/android_i build/7090300 channel/master innerVer/7090300 osVer/13 network/1").build().unwrap();
-        // let resp = client.execute(req.try_clone().unwrap()).await.unwrap();
-        // let resp_ext = ResponseExt::new(req, None, (), resp)
-        //     .into_bili_result()
-        //     .await
-        //     .unwrap();
-        // println!("{:?}", resp_ext.o_req());
-        // println!("{:?}", resp_ext.o_req().version());
-        // println!("{:?}", resp_ext.o_proxy());
-        // println!("{:?}", resp_ext.headers());
-        // println!("{:?}", resp_ext.data());
+        let url = "https://api.bilibili.com/x/frontend/finger/spi";
+        let proxy = "socks5://127.0.0.1:20023";
 
-        let url_clone = url.clone();
-        let _ = tokio::spawn(async move {
-            let client = super::get_client(Some("socks5://127.0.0.1:20023"))
+        let a: Option<ManagedHeaderMap> = None;
+
+        let r = super::RestRequest::builder()
+            .proxy(Some(proxy))
+            .url(url)
+            .headers(a)
+            .build()
+            .unwrap()
+            .get()
+            .await
+            .unwrap()
+            .bili_json()
+            .await
+            .unwrap();
+
+        tracing::debug!("1 => {:?}", r.data());
+
+        tokio::time::sleep(Duration::from_secs(90)).await;
+
+        let handler = tokio::spawn(async {
+            let r = super::RestRequest::builder()
+                .proxy(Some(proxy))
+                .url(url)
+                .build()
+                .unwrap()
+                .get()
+                .await
+                .unwrap()
+                .bili_json()
                 .await
                 .unwrap();
-            let resp = client.clone().get(url_clone).header("user-agent", "Dalvik/2.1.0 (Linux; U; Android 13; NOH-AN02 Build/HUAWEINOH-AN02) 7.9.0 os/android model/NOH-AN02 mobi_app/android_i build/7090300 channel/master innerVer/7090300 osVer/13 network/1").send().await.unwrap();
-            tracing::warn!("1 => {:?}", resp.text().await);
-        }).await;
 
-        tokio::time::sleep(Duration::from_secs(300)).await;
+            tracing::debug!("SP => {:?}", r.data());
+        });
 
-        let url_clone = url.clone();
-        let _ = tokio::spawn(async move {
-            let client = super::get_client(Some("socks5://127.0.0.1:20023"))
-                .await
-                .unwrap();
-            let resp = client.clone().get(url_clone).header("user-agent", "Dalvik/2.1.0 (Linux; U; Android 13; NOH-AN02 Build/HUAWEINOH-AN02) 7.9.0 os/android model/NOH-AN02 mobi_app/android_i build/7090300 channel/master innerVer/7090300 osVer/13 network/1").send().await.unwrap();
-            tracing::warn!("2 => {:?}", resp.text().await);
-        }).await;
+        let r = super::RestRequest::builder()
+            .proxy(Some(proxy))
+            .url(url)
+            .build()
+            .unwrap()
+            .get()
+            .await
+            .unwrap()
+            .bili_json()
+            .await
+            .unwrap();
 
-        // tokio::
+        tracing::debug!("2 => {:?}", r.data());
+
+        let _ = handler.await;
     }
 }

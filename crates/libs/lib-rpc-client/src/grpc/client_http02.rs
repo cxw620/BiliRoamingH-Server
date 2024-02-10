@@ -1,10 +1,7 @@
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 
-use std::{
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::{sync::OnceLock, time::Duration};
 
 use super::{connect_http02::Connector, proxy::Proxy};
 

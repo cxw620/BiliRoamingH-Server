@@ -9,6 +9,13 @@ pub enum Error {
         source: reqwest::Error,
     },
 
+    #[error(transparent)]
+    /// Error when parsing url
+    UrlParse {
+        #[from]
+        source: url::ParseError,
+    },
+
     /// Check Response Status Error
     #[error("Invalid response with HTTP StatusCode [{0}]")]
     HttpStatus(u16),

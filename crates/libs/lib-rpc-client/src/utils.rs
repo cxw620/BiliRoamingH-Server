@@ -32,7 +32,7 @@ pub struct ResponseExt<H, D> {
     /// Original request
     o_req: reqwest::Request,
     /// Original proxy
-    o_proxy: Option<reqwest::Proxy>,
+    o_proxy: Option<String>,
     /// Original response headers, when `T` is actually `reqwest::Response`,
     /// this field will be `()` since `reqwest::Response` will not be consumed
     /// actively.
@@ -49,13 +49,13 @@ pub type ConsumedResponseExt<D = serde_json::Value> = ResponseExt<http_02::Heade
 impl<H, T> ResponseExt<H, T> {
     pub fn new(
         o_req: reqwest::Request,
-        o_proxy: Option<reqwest::Proxy>,
+        o_proxy: Option<impl Into<String>>,
         resp_headers: H,
         resp_data: T,
     ) -> Self {
         Self {
             o_req,
-            o_proxy,
+            o_proxy: o_proxy.and_then(|p| Some(p.into())),
             resp_headers,
             resp_data,
         }
@@ -65,7 +65,7 @@ impl<H, T> ResponseExt<H, T> {
         &self.o_req
     }
 
-    pub fn o_proxy(&self) -> Option<&reqwest::Proxy> {
+    pub fn o_proxy(&self) -> Option<&String> {
         self.o_proxy.as_ref()
     }
 }
@@ -271,7 +271,7 @@ impl<D> ConsumedResponseExt<D> {
         self,
     ) -> (
         reqwest::Request,
-        Option<reqwest::Proxy>,
+        Option<String>,
         http_02::HeaderMap, // compatibility for reqwest with dep:http v0.2
         Option<D>,
     ) {
