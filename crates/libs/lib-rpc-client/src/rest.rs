@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use reqwest::{Client, Proxy};
 use std::{sync::OnceLock, time::Duration};
 
-use crate::{error::ClientError, utils::RawResponseExt};
+use crate::{CrateError, utils::RawResponseExt};
 
 /// Clients with or without proxy
 static CLIENTS: OnceLock<DashMap<&'static str, reqwest::Client>> = OnceLock::new();
@@ -18,7 +18,7 @@ pub fn init_reqwest_clients(proxies: Vec<&'static str>) -> Result<()> {
     map.insert("default", gen_client(None)?);
 
     for p in proxies {
-        let rp = Proxy::all(p).map_err(|e| anyhow!(ClientError::from(e)))?;
+        let rp = Proxy::all(p).map_err(|e| anyhow!(CrateError::from(e)))?;
         map.insert(p, gen_client(Some(rp))?);
     }
 
@@ -54,7 +54,7 @@ fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
     if let Some(proxy) = proxy {
         builder = builder.proxy(proxy);
     }
-    builder.build().map_err(|e| anyhow!(ClientError::from(e)))
+    builder.build().map_err(|e| anyhow!(CrateError::from(e)))
 }
 
 /// Get reqwest::Client from CLIENTS cache or new one with given proxy
@@ -83,7 +83,7 @@ async fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
 
         let proxy_str = proxy.unwrap();
 
-        let rp = Proxy::all(proxy_str).map_err(|e| anyhow!(ClientError::from(e)))?;
+        let rp = Proxy::all(proxy_str).map_err(|e| anyhow!(CrateError::from(e)))?;
 
         let client = gen_client(Some(rp))?;
         clients.insert(Box::leak(Box::new(proxy_str.to_string())), client.clone());

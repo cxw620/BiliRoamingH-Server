@@ -1,6 +1,7 @@
+use std::borrow::Cow;
+
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use tracing::error;
 
 #[derive(Serialize, Deserialize, Clone)]

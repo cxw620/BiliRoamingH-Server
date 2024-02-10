@@ -1,10 +1,8 @@
 use anyhow::{bail, Result};
 use bytes::Bytes;
-use reqwest::blocking::Response;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::ClientError, grpc::proxy::Proxy};
-use lib_utils::error::BiliError;
+use crate::{BiliError, CrateError};
 
 // ==================== impl ResponseExt ====================
 
@@ -84,7 +82,7 @@ impl RawResponseExt {
                 "Invalid response with headers [{:?}]",
                 &self.resp_data.headers()
             );
-            bail!(ClientError::HttpStatus(status.as_u16()))
+            bail!(crate::CrateError::HttpStatus(status.as_u16()))
         }
         Ok(())
     }
@@ -100,7 +98,7 @@ impl RawResponseExt {
         self.check_response_status()?;
         let mut response = self.resp_data;
         let resp_headers = std::mem::take(response.headers_mut());
-        let resp_data = response.text().await.map_err(|e| ClientError::from(e))?;
+        let resp_data = response.text().await.map_err(|e| CrateError::from(e))?;
         Ok(ConsumedResponseExt {
             o_req: self.o_req,
             o_proxy: self.o_proxy,
@@ -115,7 +113,7 @@ impl RawResponseExt {
         self.check_response_status()?;
         let mut response = self.resp_data;
         let resp_headers = std::mem::take(response.headers_mut());
-        let resp_data = response.bytes().await.map_err(|e| ClientError::from(e))?;
+        let resp_data = response.bytes().await.map_err(|e| CrateError::from(e))?;
         Ok(ConsumedResponseExt {
             o_req: self.o_req,
             o_proxy: self.o_proxy,
@@ -138,7 +136,7 @@ impl RawResponseExt {
         let resp_data = response
             .json::<D>()
             .await
-            .map_err(|e| ClientError::from(e))?;
+            .map_err(|e| CrateError::from(e))?;
         Ok(ConsumedResponseExt {
             o_req: self.o_req,
             o_proxy: self.o_proxy,
@@ -148,9 +146,7 @@ impl RawResponseExt {
     }
 
     /// Consumes reqwest::Response and return `ConsumedResponseExt` with headers
-    /// and deserialized JSON data, Bilibili's API specified
-    ///
-    /// Generic `D` defaults to be `serde_json::Value`, or you can specify one
+    /// and deserialized JSON data, Bilibili's API specified(BiliResponse.data field)
     pub async fn bili_json(self) -> Result<ConsumedResponseExt<serde_json::Value>> {
         let ResponseExt {
             o_req,
@@ -158,55 +154,73 @@ impl RawResponseExt {
             resp_headers,
             resp_data,
         } = self.json::<BiliResponse>().await?;
-        let resp_data = Ok(resp_data).and_then(|data| {
-            if let Some(data) = data {
-                // Check if is standard BiliResponse
-                if data.code == 5500900 {
-                    tracing::warn!(
-                        "BiliError: Not standard response, try parse whole response like data field"
-                    );
-                    bail!(BiliError::ReqRiskControl)
-                }
 
-                // Check BiliError from ECode and EMessage
-                if let Ok(error) = BiliError::try_from((data.code, data.message.as_str())) {
-                    tracing::error!(
-                        "BiliError: {:?}, with original resp: {:?}",
-                        error,
-                        serde_json::to_string(&data)
-                    );
-                    bail!(error)
-                }
+        let resp_data = if let Some(bili_response) = resp_data {
+            if bili_response.code == 5500900 {
+                let bili_status_code = resp_headers
+                    .get("Bili-Status-Code")
+                    .and_then(|c| c.to_str().ok());
 
-                let data = if let Some(data) = data.data {
-                    // Check possible dirty data
-                    if let Some(v_voucher) = data.get("v_voucher") {
-                        // Only with v_voucher field in data
-                        if data.as_object().unwrap().len() == 1 {
-                            tracing::error!(
-                                "BiliError: Req risk controlled1 v_voucher [{:?}]",
-                                v_voucher
-                            );
-                            bail!(BiliError::ReqRiskControl)
-                        } else {
-                            // Not know exactly if is risk controlled
-                            // Log and continue
-                            tracing::warn!(
-                                "BiliError: May be req risk controlled, resp: {:?}",
-                                &data
-                            );
-                        }
+                match bili_status_code {
+                    Some("0") => {
+                        tracing::warn!("seems not standard BiliResponse");
+                        bail!(CrateError::UnknownDataStruct)
                     }
-                    Some(data)
-                } else {
-                    None
-                };
-
-                Ok(data)
-            } else {
-                Ok(None)
+                    None => {
+                        tracing::error!(
+                            "Bili-Status-Code not found in headers or invalid str. resp_headers: {:?}",
+                            &resp_headers
+                        );
+                        bail!(CrateError::UnknownDataStruct)
+                    }
+                    _ => {
+                        let bili_status_code = bili_status_code.unwrap().parse().unwrap_or(5500900);
+                        let error =
+                            BiliError::try_from((bili_status_code, "Unknown message")).unwrap();
+                        tracing::error!(
+                            "Not standard BiliResponse along with BiliError {:?}, with original resp_headers: {:?}",
+                            error,
+                            &resp_headers
+                        );
+                        bail!(crate::CrateError::from(error))
+                    }
+                }
             }
-        })?;
+
+            if let Ok(error) =
+                BiliError::try_from((bili_response.code, bili_response.message.as_str()))
+            {
+                tracing::error!(
+                    "BiliError: {:?}, with original resp: {:?}",
+                    error,
+                    serde_json::to_string(&bili_response)
+                );
+                bail!(crate::CrateError::from(error))
+            }
+
+            if let Some(data) = bili_response.data {
+                // Check possible dirty data
+                if let Some(v_voucher) = data.get("v_voucher") {
+                    // Only with v_voucher field in data
+                    if data.as_object().unwrap().len() == 1 {
+                        tracing::error!(
+                            "BiliError: req risk controlled with v_voucher [{:?}]",
+                            v_voucher
+                        );
+                        bail!(CrateError::from(BiliError::ReqRiskControl))
+                    } else {
+                        // Not know exactly if is risk controlled
+                        // Log and continue
+                        tracing::warn!("BiliError: May be req risk controlled, resp: {:?}", &data);
+                    }
+                }
+                Some(data)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         Ok(ConsumedResponseExt {
             o_req,
