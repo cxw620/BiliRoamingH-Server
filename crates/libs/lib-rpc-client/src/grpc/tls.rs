@@ -19,7 +19,7 @@ pub(crate) fn rustls_config(danger_ignore_invalid_certs: bool) -> rustls::Client
 
     let mut config = builder.with_root_certificates(roots).with_no_client_auth();
 
-    // config.alpn_protocols.push("h2".as_bytes().to_vec());
+    config.alpn_protocols.push("h2".as_bytes().to_vec());
 
     if danger_ignore_invalid_certs {
         config

@@ -30,11 +30,9 @@ sha2 = "0.10"
 urlencoding = "2.1"
 
 # Business deps
-axum = { workspace = true }
+axum = { workspace = true, features = ["json"] }
 tonic = { workspace = true }
 
 # Local libs
 lib_bilibili = { workspace = true }
 
-[dev-dependencies]
-axum = { workspace = true }
