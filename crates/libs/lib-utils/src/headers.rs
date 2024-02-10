@@ -217,7 +217,7 @@ pub struct ManagedHeaderMap {
     // Set if it's gRPC Metadata
     is_metadata: bool,
     // Set if it's for Bilibili
-    _for_bili: bool,
+    for_bili: bool,
 }
 
 impl ManagedHeaderMap {
@@ -229,7 +229,7 @@ impl ManagedHeaderMap {
         let mut map = Self {
             inner: HttpHeaderMap::with_capacity(32),
             is_metadata,
-            _for_bili: for_bili,
+            for_bili,
         };
 
         if for_bili {
@@ -253,6 +253,9 @@ impl ManagedHeaderMap {
                 map.insert_from_static(HeaderKey::Custom("te"), "trailers");
                 map.insert_from_static(HeaderKey::Custom("content-type"), "application/grpc");
             }
+        } else {
+            // Add basic headers for general http request
+            map.insert_from_static(HeaderKey::UserAgent, user_agent::FakeUA::UA_DALVIK_DEFAULT);
         }
 
         map
@@ -270,7 +273,7 @@ impl ManagedHeaderMap {
         Self {
             inner,
             is_metadata,
-            _for_bili: for_bili,
+            for_bili,
         }
     }
 
@@ -397,12 +400,17 @@ impl ManagedHeaderMap {
         std::mem::take(&mut self.inner)
     }
 
-    /// Verify if all required headers are set
+    /// Verify if all required headers are set.
+    /// 
+    /// Will skip verification if `self.for_bili` is `false`.
     ///
     /// # Panics(debug)
     ///
     /// Not setting any possible header will cause runtime panics.
     fn verify(&self) {
+        if !self.for_bili {
+            return
+        }
         macro_rules! check_if_exist {
             ($key:expr) => {
                 if (!self.contains_key($key)) {
