@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
+use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
 use tonic::metadata::MetadataMap;
 use tracing::warn;
-use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
 
 use std::fmt::Write;
 
@@ -232,6 +232,12 @@ impl ManagedHeaderMap {
             for_bili,
         };
 
+        if is_metadata {
+            // Will be used to replace original tonic Metadata in interceptor.
+            map.insert_from_static(HeaderKey::Custom("te"), "trailers");
+            map.insert_from_static(HeaderKey::Custom("content-type"), "application/grpc");
+        }
+
         if for_bili {
             map.insert_default(HeaderKey::Env);
             map.insert_default(HeaderKey::BiliAuroraEid);
@@ -248,10 +254,6 @@ impl ManagedHeaderMap {
                 map.insert_default(HeaderKey::BiliRestrictionBin);
                 map.insert_default(HeaderKey::BiliLocaleBin);
                 map.insert_default(HeaderKey::BiliExpsBin);
-
-                // Will be used to replace original tonic Metadata in interceptor.
-                map.insert_from_static(HeaderKey::Custom("te"), "trailers");
-                map.insert_from_static(HeaderKey::Custom("content-type"), "application/grpc");
             }
         } else {
             // Add basic headers for general http request
@@ -381,10 +383,8 @@ impl ManagedHeaderMap {
 
     #[inline]
     fn insert_default(&mut self, key: HeaderKey) -> &mut Self {
-        self.inner.insert(
-            key.str(),
-            HttpHeaderValue::from_static(key.default_value()),
-        );
+        self.inner
+            .insert(key.str(), HttpHeaderValue::from_static(key.default_value()));
 
         self
     }
@@ -401,7 +401,7 @@ impl ManagedHeaderMap {
     }
 
     /// Verify if all required headers are set.
-    /// 
+    ///
     /// Will skip verification if `self.for_bili` is `false`.
     ///
     /// # Panics(debug)
@@ -409,7 +409,7 @@ impl ManagedHeaderMap {
     /// Not setting any possible header will cause runtime panics.
     fn verify(&self) {
         if !self.for_bili {
-            return
+            return;
         }
         macro_rules! check_if_exist {
             ($key:expr) => {
