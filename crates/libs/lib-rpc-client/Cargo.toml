@@ -1,63 +1,51 @@
 [package]
 name = "lib_rpc_client"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-# Basic deps
-anyhow = "1.0"
+# Dev deps
+anyhow = { workspace = true }
 async-trait = "0.1"
-base64 = "0.21"
-bytes = "1.5"
-dashmap = "5.5"
+bytes = { workspace = true }
 log = "0.4"
 pin-project-lite = "0.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1"
-tracing = "0.1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
-# Core deps
-http = "1.0"
-http-body = "1.0.0"
-http-body-util = "0.1.0"
-hyper = { version = "1.1", features = ["full"] }
-hyper-tls = { version = "0.6.0", features = ["alpn"] }
-hyper-util = { version = "0.1.2", features = [
-    "client-legacy",
-    "http1",
-    "http2",
-] }
+
+# Basic deps
+base64 = { workspace = true }
+dashmap = "5.5"
+http-02 = { workspace = true }       # compatibility
+http-body-04 = { workspace = true }  # compatibility
+hyper-014 = { workspace = true }     # compatibility
 percent-encoding = "2"
-tokio = { version = "1.35", features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-service = { workspace = true }
 url = "2.5"
 
-## Hyper 0.14 compatibility for tonic & reqwest
-http-02 = { package = "http", version = "0.2.11" }
-http-body-04 = { package = "http-body", version = "0.4.6" }
-hyper-014 = { package = "hyper", version = "0.14.28", features = ["full"] }
-
-## reqwest
-reqwest = { version = "0.11", features = [
+# Business deps
+reqwest = { workspace = true, features = [
     "blocking",
     "socks",
     "brotli",
     "gzip",
     "deflate",
     "rustls-tls",
-    # "native-tls-alpn",
     "json",
     "cookies",
 ] }
+tonic = { workspace = true, features = ["gzip"] }
 
-## tonic
-tonic = { version = "0.10", default-features = false, features = ["gzip"] }
-tower = "0.4"
-tower-service = "0.3"
-
-# Owned deps
-lib_bilibili = { path = "../lib-bilibili" }
-lib_utils = { path = "../lib-utils" }
+# Local libs
+lib_bilibili = { workspace = true }
+lib_utils = { workspace = true }
 
 # Optional deps...
 
@@ -74,22 +62,26 @@ rustls-native-certs = { version = "0.6", optional = true }
 tokio-socks = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
-tracing-subscriber = "0.3"
-tonic = { version = "0.10", default-features = true, features = ["gzip"] }
+tracing-subscriber = { workspace = true }
+tonic = { workspace = true }
 
 [features]
 default = ["rustls-tls", "proxy"]
 
-rustls-tls = ["rustls-tls-webpki-roots"]
-rustls-tls-manual-roots = ["__rustls"]
-rustls-tls-webpki-roots = ["webpki-roots", "__rustls"]
-rustls-tls-native-roots = ["rustls-native-certs", "__rustls"]
+proxy = ["socks"]
+socks = ["tokio-socks"]
 
-# Use RustTLS as default TLS backend
-__tls = []
+# TLS Feature
+# TODO: may add native TLS backend
+rustls-tls = ["rustls-tls-webpki-roots"]
+rustls-tls-webpki-roots = ["webpki-roots", "__rustls"]
+# rustls-tls-native-roots = ["rustls-native-certs", "__rustls"]
+
+# ============= Inner feature =============
+
+__tls = [] # TLS backend should be always enabled
 
 # Enables common rustls code.
-# Equivalent to rustls-tls-manual-roots but shorter :)
 __rustls = [
     "hyper-rustls",
     "tokio-rustls",
@@ -98,7 +90,3 @@ __rustls = [
     "dep:rustls-pemfile",
     # "rustls-pki-types",
 ]
-
-proxy = ["socks"]
-socks = ["tokio-socks"]
-

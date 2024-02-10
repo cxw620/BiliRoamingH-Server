@@ -651,5 +651,9 @@ pub(crate) enum HeaderError {
     #[error(transparent)]
     ToStrError(#[from] http::header::ToStrError),
     #[error(transparent)]
+    ToStrError02(#[from] http_02::header::ToStrError),
+    #[error(transparent)]
     InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
+    #[error(transparent)]
+    InvalidHeaderValue02(#[from] http_02::header::InvalidHeaderValue),
 }

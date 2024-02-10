@@ -1,7 +1,9 @@
 use anyhow::{anyhow, Result};
-use std::fmt::Write;
 use tonic::metadata::MetadataMap;
 use tracing::warn;
+use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
+
+use std::fmt::Write;
 
 use crate::error::HeaderError;
 use crate::{b64_decode, b64_encode, encode_grpc_header_bin, now, random_string, str_concat};
@@ -119,7 +121,7 @@ use lib_bilibili::bapis::metadata::{
 };
 
 pub trait BiliHeaderT {
-    fn set(&mut self, key: HeaderKey, value: impl TryInto<http::HeaderValue>) -> &mut Self;
+    fn set(&mut self, key: HeaderKey, value: impl TryInto<HttpHeaderValue>) -> &mut Self;
     fn set_binary(&mut self, key: HeaderKey, value: impl AsRef<[u8]>) -> &mut Self;
     /// Set `authorization`
     fn set_access_key(&mut self, access_key: &str) -> &mut Self {
@@ -211,7 +213,7 @@ pub trait BiliHeaderT {
 /// United `http::HeaderMap` wrapper for both `reqwest` & `tonic`
 #[derive(Debug, Clone)]
 pub struct ManagedHeaderMap {
-    inner: http::HeaderMap,
+    inner: HttpHeaderMap,
     // Set if it's gRPC Metadata
     is_metadata: bool,
     // Set if it's for Bilibili
@@ -225,7 +227,7 @@ impl ManagedHeaderMap {
     /// - `for_bili` is set to `true` if it's for requesting Bilibili, now reserved for future use.
     pub fn new(is_metadata: bool, for_bili: bool) -> Self {
         let mut map = Self {
-            inner: http::HeaderMap::with_capacity(32),
+            inner: HttpHeaderMap::with_capacity(32),
             is_metadata,
             _for_bili: for_bili,
         };
@@ -264,7 +266,7 @@ impl ManagedHeaderMap {
     /// **NOT** check if the given `http::HeaderMap` is valid for gRPC Metadata, or
     /// adding any default headers like `.new()`, which may cause runtime panics when
     /// `.take_inner()`.
-    pub fn new_from_existing(inner: http::HeaderMap, is_metadata: bool, for_bili: bool) -> Self {
+    pub fn new_from_existing(inner: HttpHeaderMap, is_metadata: bool, for_bili: bool) -> Self {
         Self {
             inner,
             is_metadata,
@@ -321,7 +323,7 @@ impl ManagedHeaderMap {
     /// key when `self.is_metadata`.
     pub fn insert<T>(&mut self, key: HeaderKey, value: T) -> &mut Self
     where
-        T: TryInto<http::HeaderValue>,
+        T: TryInto<HttpHeaderValue>,
     {
         debug_assert!(!self.is_metadata || (!Self::is_valid_bin_key(key.str())));
 
@@ -369,7 +371,7 @@ impl ManagedHeaderMap {
     /// This function panics if the argument `value` contains invalid header value characters.
     pub fn insert_from_static(&mut self, key: HeaderKey, value: &'static str) -> &mut Self {
         self.inner
-            .insert(key.str(), http::HeaderValue::from_static(value));
+            .insert(key.str(), HttpHeaderValue::from_static(value));
 
         self
     }
@@ -378,7 +380,7 @@ impl ManagedHeaderMap {
     fn insert_default(&mut self, key: HeaderKey) -> &mut Self {
         self.inner.insert(
             key.str(),
-            http::HeaderValue::from_static(key.default_value()),
+            HttpHeaderValue::from_static(key.default_value()),
         );
 
         self
@@ -388,7 +390,7 @@ impl ManagedHeaderMap {
     /// Take inner `http::HeaderMap` out
     ///
     /// **DO NOT** use original builder after calling this, as inner data has been taken out
-    pub fn take_inner(&mut self) -> http::HeaderMap {
+    pub fn take_inner(&mut self) -> HttpHeaderMap {
         // Should not panic when release
         self.verify();
 
@@ -467,7 +469,7 @@ impl ManagedHeaderMap {
 
 impl BiliHeaderT for ManagedHeaderMap {
     #[inline]
-    fn set(&mut self, key: HeaderKey, value: impl TryInto<http::HeaderValue>) -> &mut Self {
+    fn set(&mut self, key: HeaderKey, value: impl TryInto<HttpHeaderValue>) -> &mut Self {
         self.insert(key, value)
     }
 

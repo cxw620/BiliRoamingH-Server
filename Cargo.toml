@@ -1,9 +1,9 @@
 [package]
 name = "biliroamingh_rust_server"
-version = "0.1.0"
-authors = ["Hantong Chen <hantong@utop.win>"]
-edition = "2021"
-rust-version = "1.75"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [workspace]
 resolver = "2"
@@ -19,21 +19,77 @@ members = [
 
     # -- Tools
 ]
-exclude = [
-    "crates/libs/lib-bilibili",
-]
+exclude = ["crates/libs/lib-bilibili"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Hantong Chen <hantong@utop.win>"]
+edition = "2021"
+rust-version = "1.75"
 
 [[bin]]
 bench = false
 path = "crates/core/main.rs"
 name = "biliroamingh_rust_server"
 
-[dependencies]
-axum = { version = "0.7", features = ["http2"]}
-services ={ path = "crates/services"}
-tokio = { version = "1.35", features = ["full"] }
+[workspace.dependencies]
+# Dev deps
+anyhow = "1.0"
+bytes = "1.5"
+thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+# Basic deps
+base64 = "0.21"
+http = "1.0"
+http-02 = { package = "http", version = "0.2" }                             # compatibility
+http-body = "1.0"
+http-body-util = "0.1"
+http-body-04 = { package = "http-body", version = "0.4.6" }                 # compatibility
+hyper = { version = "1.1", features = ["full"] }
+hyper-014 = { package = "hyper", version = "0.14.28", features = ["full"] }
+prost = "0.12"
+prost-types = "0.12"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+tower = "0.4"
+tower-service = "0.3"
+
+# Business deps
+axum = { version = "0.7", default-features = false }
+reqwest = { version = "0.11", default-features = false }
+tonic = { version = "0.11", default-features = false }
+
+# Local libs
+lib_core = { path = "crates/libs/lib-core" }
+lib_bilibili = { path = "crates/libs/lib-bilibili" }
+lib_rpc_client = { path = "crates/libs/lib-rpc-client" }
+lib_rpc = { path = "crates/libs/lib-rpc" }
+lib_utils = { path = "crates/libs/lib-utils" }
+
+[workspace.dev-dependencies]
+axum = { workspace = true, features = ["default", "http2", "json"] }
+tonic = { workspace = true, features = ["default", "gzip"] }
+
+# Local libs
+lib_core = { workspace = true }
+lib_bilibili = { workspace = true }
+lib_rpc_client = { workspace = true }
+lib_rpc = { workspace = true }
+lib_utils = { workspace = true }
+
+[dependencies]
+# Dev deps
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Business deps
+axum = { workspace = true, features = ["default", "http2", "json"] }
+tokio = { workspace = true }
+services = { path = "crates/services" }
 
 [patch.crates-io]
 reqwest = { git = 'https://github.com/cxw620/lib_reqwest.git', rev = 'ed9dbc7649f53cd18b5bdfe88173064c95bd6b78' }

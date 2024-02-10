@@ -1,18 +1,17 @@
 [package]
 name = "lib_rpc"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-# Basic deps
-anyhow = "1"
+# Dev deps
+anyhow = { workspace = true }
 
 # Business deps
-tonic ={ version = "0.10", features = ["gzip"] }
+tonic = { workspace = true, features = ["gzip"] }
 
 # Local deps
-lib_rpc_client = { path = "../lib-rpc-client" }
-lib_utils = { path = "../lib-utils" }
-
+lib_rpc_client = { workspace = true }
+lib_utils = { workspace = true }

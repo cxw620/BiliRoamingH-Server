@@ -1,22 +1,31 @@
 [package]
 name = "services"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.75"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-anyhow = "1.0"
-axum = "0.7"
-bytes = "1.5"
-http = "1.0"
-lib_bilibili ={ path = "../libs/lib-bilibili" }
-lib_utils = { path = "../libs/lib-utils" }
-prost = "0.12.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tonic = { version = "0.10.2", features = ["gzip"]}
-tracing = "0.1"
+# Workspace deps
+## Dev deps
+anyhow = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+
+## Basic deps
+http = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+## Business deps
+axum = { workspace = true }
+tonic = { workspace = true, features = ["default", "gzip"] }
+
+## Local libs
+lib_bilibili = { workspace = true }
+lib_utils = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1.35", features = ["full"] }
-tracing-subscriber = "0.3"
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
