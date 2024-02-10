@@ -487,6 +487,12 @@ impl BiliHeaderT for ManagedHeaderMap {
     }
 }
 
+impl Into<HttpHeaderMap> for ManagedHeaderMap {
+    fn into(mut self) -> HttpHeaderMap {
+        self.take_inner()
+    }
+}
+
 impl tonic::service::Interceptor for ManagedHeaderMap {
     fn call(&mut self, request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
         let (metadata_original, extensions, message) = request.into_parts();
