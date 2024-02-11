@@ -1,9 +1,14 @@
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
+use http_02::{Request as HttpRequest, Response as HttpResponse};
 
-use std::{sync::OnceLock, time::Duration};
+use std::{future::Future, pin::Pin, sync::OnceLock, task::Poll, time::Duration};
 
-use super::{connect_http02::Connector, proxy::Proxy};
+use crate::{
+    utils::ManagedHeaderMap,
+    grpc::{connect_http02::Connector, proxy::Proxy},
+    CrateError,
+};
 
 type GrpcClient = hyper_014::Client<Connector, tonic::body::BoxBody>;
 
@@ -49,7 +54,8 @@ fn gen_client(proxies: Option<Proxy>) -> Result<GrpcClient> {
 }
 
 /// Get GrpcClient from CLIENTS cache or new one with given proxy
-pub async fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
+#[tracing::instrument]
+pub fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
     let clients = CLIENTS.get_or_init(|| {
         tracing::warn!("CLIENTS should be initialized before get_client!!!");
         let map = DashMap::with_capacity(16);
@@ -84,11 +90,107 @@ pub async fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
     }
 }
 
+/// A ClientExt for outgoing gRPC requests.
+/// 
+/// Should not reuse this since headers will be taken and cleared after each request.
+pub struct GrpcClientExt<'c> {
+    proxy: Option<&'c str>,
+    headers: ManagedHeaderMap,
+    used: bool,
+}
+
+impl<'c> GrpcClientExt<'c> {
+    #[inline]
+    pub fn new(proxy: Option<&'c str>, headers: ManagedHeaderMap) -> Self {
+        Self { proxy, headers, used: false }
+    }
+
+    #[inline]
+    fn headers_mut(&mut self) -> &mut ManagedHeaderMap {
+        &mut self.headers
+    }
+}
+
+type GrpcRequest = HttpRequest<tonic::body::BoxBody>;
+
+impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
+    type Response = HttpResponse<hyper_014::Body>;
+    type Error = CrateError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, mut req: GrpcRequest) -> Self::Future {
+        // Deal with original HeaderMap
+        let header_map = {
+            let header_map_original = req.headers();
+            let mut header_map = self.headers_mut().take_inner();
+
+            header_map_original.get("grpc-encoding").map(|encoding| {
+                header_map.insert("grpc-encoding", encoding.clone());
+            });
+            header_map_original
+                .get("grpc-accept-encoding")
+                .map(|accept_encoding| {
+                    header_map.insert("grpc-accept-encoding", accept_encoding.clone());
+                });
+
+            header_map
+        };
+        *req.headers_mut() = header_map;
+
+        let client = get_client(self.proxy);
+
+        if self.used {
+            tracing::error!("GrpcClientExt should not be reused");
+            return Box::pin(async move {
+                Err(CrateError::General(anyhow!("GrpcClientExt should not be reused")))
+            });
+        }
+
+        Box::pin(async move {
+            let client = client?;
+
+            let mut response = client.request(req).await.map_err(|e| {
+                tracing::error!("GrpcClient met with error: {:?}", e);
+                CrateError::from(e)
+            })?;
+
+            let headers = response.headers_mut();
+
+            let status = tonic::Status::from_header_map(headers).ok_or_else(|| {
+                tracing::error!("GrpcClient met with error: not Grpc Response");
+                CrateError::NotGrpcResponse
+            })?;
+
+            // Remove gRPC status headers, or tonic will complain about "protocol error:
+            // received message with compressed-flag but no grpc-encoding was specified"
+            headers.remove("grpc-status");
+            headers.remove("grpc-message");
+            headers.remove("grpc-status-details-bin");
+
+            if status.code() != tonic::Code::Ok {
+                tracing::error!("GrpcClient met with error: {:?}", status);
+                return Err(CrateError::from(status));
+            }
+
+            Ok(response)
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use lib_bilibili::bapis::metadata::device::Device;
+    use tonic::IntoRequest;
+
+    use std::time::Duration;
+
+    use super::GrpcClientExt;
     use lib_bilibili::bapis::{
         app::playerunite::v1::{player_client::PlayerClient, PlayViewUniteReq},
+        metadata::device::Device,
         playershared::VideoVod,
     };
     use lib_utils::{
@@ -96,12 +198,6 @@ mod test {
         headers::{BiliHeaderT, ManagedHeaderMap},
         now,
     };
-
-    use crate::grpc::connect_http02::Connector;
-    use crate::grpc::proxy::Proxy;
-    use std::time::Duration;
-    use tonic::transport::Channel;
-    use tonic::IntoRequest;
 
     fn request_for_test() -> tonic::Request<PlayViewUniteReq> {
         let mut request = PlayViewUniteReq {
@@ -126,16 +222,6 @@ mod test {
         request
     }
 
-    fn connector(proxy_str: Option<&str>) -> Connector {
-        let mut proxies = vec![];
-        if let Some(proxy_str) = proxy_str {
-            let proxy = Proxy::new(proxy_str).unwrap();
-            proxies.push(proxy);
-        }
-
-        Connector::new(proxies, None)
-    }
-
     fn headers() -> ManagedHeaderMap {
         let mut headers = ManagedHeaderMap::new(true, true);
 
@@ -151,124 +237,17 @@ mod test {
         headers
     }
 
-    async fn channel_with_proxy(proxy_str: Option<&str>) -> Channel {
-        Channel::builder("https://app.bilibili.com".parse().unwrap())
-            .tcp_keepalive(Some(Duration::from_secs(3600)))
-            .http2_keep_alive_interval(Duration::from_secs(18))
-            .keep_alive_while_idle(true)
-            .keep_alive_timeout(Duration::from_secs(16))
-            .initial_connection_window_size(Some((1 << 28) - 1))
-            .initial_stream_window_size(Some((1 << 28) - 1))
-            .connect_with_connector(connector(proxy_str))
-            .await
-            .unwrap()
-    }
-
-    async fn hyper_client(
-        connector: Connector,
-    ) -> hyper_014::Client<Connector, tonic::body::BoxBody> {
-        hyper_014::Client::builder()
-            .pool_idle_timeout(Duration::from_secs(3600))
-            // ! Should set UA separately
-            // .user_agent(user_agent)
-            .http2_keep_alive_interval(Some(Duration::from_secs(18)))
-            .http2_keep_alive_while_idle(true)
-            .http2_keep_alive_timeout(Duration::from_secs(16))
-            .http2_initial_connection_window_size(Some((1 << 28) - 1))
-            .http2_initial_stream_window_size(Some((1 << 28) - 1))
-            .build(connector)
-    }
-
-    #[tokio::test]
-    async fn test_grpc() {
-        let request = request_for_test();
-
-        let tls = crate::grpc::tls::rustls_config(true);
-
-        let mut http = hyper_014::client::connect::HttpConnector::new();
-        http.enforce_http(false);
-
-        // We have to do some wrapping here to map the request type from
-        // `https://example.com` -> `https://[::1]:50051` because `rustls`
-        // doesn't accept ip's as `ServerName`.
-        let connector = tower::ServiceBuilder::new()
-            .layer_fn(move |s| {
-                let tls = tls.clone();
-
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_tls_config(tls)
-                    .https_or_http()
-                    .enable_http2()
-                    .wrap_connector(s)
-            })
-            // Since our cert is signed with `example.com` but we actually want to connect
-            // to a local server we will override the Uri passed from the `HttpsConnector`
-            // and map it to the correct `Uri` that will connect us directly to the local server.
-            .map_request(|_| http_02::Uri::from_static("https://app.bilibili.com"))
-            .service(http);
-
-        let client = hyper_014::Client::builder().build(connector);
-
-        // Using `with_origin` will let the codegenerated client set the `scheme` and
-        // `authority` from the porvided `Uri`.
+    #[tracing::instrument]
+    async fn test_custom_client(proxy: Option<&str>) {
         let uri = http_02::Uri::from_static("https://app.bilibili.com");
-
-        let mut client = PlayerClient::with_origin(client, uri)
-            .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
-            .send_compressed(tonic::codec::CompressionEncoding::Gzip);
-
-        let now = now!().as_millis();
-
-        let resp = client.play_view_unite(request).await.unwrap();
-
-        println!("time: {}", now!().as_millis() - now);
-        println!("{:?}", resp);
-    }
-
-    async fn test_grpc_with_channel(channel: Channel) {
-        let request = request_for_test();
-
-        let mut client = PlayerClient::new(channel)
-            .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
-            .send_compressed(tonic::codec::CompressionEncoding::Gzip);
-
-        let now = now!().as_millis();
-
-        let _resp = client
-            .play_view_unite(request)
-            .await
-            .map_err(|e| {
-                tracing::error!("error: {:?}", e);
-                e
-            })
-            .unwrap();
-
-        println!("time: {}", now!().as_millis() - now);
-        // println!("{:?}", resp);
-    }
-
-    async fn test_grpc_with_interceptor(
-        client: hyper_014::Client<Connector, tonic::body::BoxBody>,
-    ) {
-        let request = request_for_test();
         let headers = headers();
-
-        let mut client = PlayerClient::with_interceptor(
-            tower::service_fn(move |mut req: hyper_014::Request<tonic::body::BoxBody>| {
-                let mut parts = std::mem::take(req.uri_mut()).into_parts();
-                parts.scheme = Some(http_02::uri::Scheme::HTTPS);
-                parts.authority = Some(http_02::uri::Authority::from_static("app.bilibili.com"));
-                let uri = http_02::Uri::from_parts(parts).unwrap();
-                let _ = std::mem::replace(req.uri_mut(), uri);
-                client.request(req)
-            }),
-            headers,
-        )
-        .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
-        .send_compressed(tonic::codec::CompressionEncoding::Gzip);
+        let mut client = PlayerClient::with_origin(GrpcClientExt::new(proxy, headers), uri)
+            .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
+            .send_compressed(tonic::codec::CompressionEncoding::Gzip);
 
         let now = now!().as_millis();
 
+        let request = request_for_test();
         let _resp = client
             .play_view_unite(request)
             .await
@@ -284,40 +263,47 @@ mod test {
 
     #[tokio::test]
     async fn test() {
-        // use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
-        // tracing_subscriber::registry().with(fmt::layer()).init();
-        println!("============= Channel =============");
+        use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+        tracing_subscriber::registry().with(fmt::layer()).init();
 
-        let channel = channel_with_proxy(Some("http://127.0.0.1:20033")).await;
-
-        test_grpc_with_channel(channel.clone()).await;
+        println!("============ Custom Client ============");
+        test_custom_client(Some("http://127.0.0.1:20033")).await;
         tokio::time::sleep(Duration::from_secs(30)).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
-        test_grpc_with_channel(channel.clone()).await;
 
-        println!("============ Interceptor ============");
+        let h1 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
 
-        let connector = connector(Some("http://127.0.0.1:20033"));
-        let client = hyper_client(connector).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        tokio::time::sleep(Duration::from_secs(30)).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
-        test_grpc_with_interceptor(client.clone()).await;
+        let h2 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
+
+        let h3 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
+        
+        let h4 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
+
+        let h5 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
+
+        let h6 = tokio::spawn(async {
+            test_custom_client(Some("http://127.0.0.1:20033")).await;
+        });
+
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+        // test_custom_client(Some("http://127.0.0.1:20033")).await;
+
+        let _ = tokio::join!(h1, h2, h3, h4, h5, h6);
     }
 }

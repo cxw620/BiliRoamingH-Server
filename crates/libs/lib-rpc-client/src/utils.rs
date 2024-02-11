@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{BiliError, CrateError};
 
+pub(crate) use lib_utils::headers::ManagedHeaderMap;
+
+
 // ==================== impl ResponseExt ====================
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -28,6 +31,7 @@ impl<T: Serialize> Default for BiliResponse<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct ResponseExt<H, D> {
     /// Original request
     o_req: reqwest::Request,
@@ -71,6 +75,7 @@ impl<H, T> ResponseExt<H, T> {
 }
 
 impl RawResponseExt {
+    #[tracing::instrument]
     fn check_response_status(&self) -> Result<()> {
         let status = self.resp_data.status();
         if status.is_client_error() || status.is_server_error() {
@@ -94,6 +99,7 @@ impl RawResponseExt {
 
     /// Consumes reqwest::Response and return `ConsumedResponseExt` with headers
     /// and simple text.
+    #[tracing::instrument]
     pub async fn text(self) -> Result<ConsumedResponseExt<String>> {
         self.check_response_status()?;
         let mut response = self.resp_data;
@@ -109,6 +115,7 @@ impl RawResponseExt {
 
     /// Consumes reqwest::Response and return `ConsumedResponseExt` with headers
     /// and simple Bytes.
+    #[tracing::instrument]
     pub async fn bytes(self) -> Result<ConsumedResponseExt<Bytes>> {
         self.check_response_status()?;
         let mut response = self.resp_data;
@@ -126,6 +133,7 @@ impl RawResponseExt {
     /// and deserialized JSON data.
     ///
     /// Generic `D` defaults to be `serde_json::Value`, or you can specify one
+    #[tracing::instrument]
     pub async fn json<D>(self) -> Result<ConsumedResponseExt<D>>
     where
         D: for<'de> serde::Deserialize<'de>,
@@ -147,6 +155,7 @@ impl RawResponseExt {
 
     /// Consumes reqwest::Response and return `ConsumedResponseExt` with headers
     /// and deserialized JSON data, Bilibili's API specified(BiliResponse.data field)
+    #[tracing::instrument]
     pub async fn bili_json(self) -> Result<ConsumedResponseExt<serde_json::Value>> {
         let ResponseExt {
             o_req,

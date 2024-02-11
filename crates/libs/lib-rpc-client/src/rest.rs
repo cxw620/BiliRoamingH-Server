@@ -104,6 +104,7 @@ fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
 /// [`RestRequest`] with ideal method, url, headers and body.
 ///
 /// **Recommended** Use [`RestRequestBuilder`] to build [`RestRequest`]
+#[derive(Debug)]
 pub struct RestRequest<'c> {
     pub proxy: Option<&'c str>,
     pub url: Url,
@@ -133,6 +134,7 @@ impl<'c> RestRequest<'c> {
     }
 
     /// Execute request with given method, url, headers and body.
+    #[tracing::instrument]
     pub async fn execute(self, method: HttpMethod) -> Result<RawResponseExt> {
         let client = get_client(self.proxy)?;
 

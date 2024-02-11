@@ -79,6 +79,7 @@ pub enum ProxyScheme {
 }
 
 impl ProxyScheme {
+    #[tracing::instrument]
     fn parse(url: &str) -> Result<Self> {
         let url = Url::parse(url).map_err(|e| anyhow!(ProxyError::from(e)))?;
 
