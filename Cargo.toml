@@ -5,6 +5,32 @@ authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+bench = false
+path = "crates/core/main.rs"
+name = "biliroamingh_rust_server"
+
+[dependencies]
+# Dev deps
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Business deps
+axum = { workspace = true, features = ["default", "http2", "json"] }
+tokio = { workspace = true }
+lib_core = { workspace = true }
+services = { path = "crates/services" }
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+panic = "unwind"
+incremental = true
+split-debuginfo = "off"
+codegen-units = 1
+rpath = false
+
 [workspace]
 resolver = "2"
 members = [
@@ -26,11 +52,6 @@ version = "0.1.0"
 authors = ["Hantong Chen <hantong@utop.win>"]
 edition = "2021"
 rust-version = "1.75"
-
-[[bin]]
-bench = false
-path = "crates/core/main.rs"
-name = "biliroamingh_rust_server"
 
 [workspace.dependencies]
 # Dev deps
@@ -81,17 +102,6 @@ lib_bilibili = { workspace = true }
 lib_rpc_client = { workspace = true }
 lib_rpc = { workspace = true }
 lib_utils = { workspace = true }
-
-[dependencies]
-# Dev deps
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-# Business deps
-axum = { workspace = true, features = ["default", "http2", "json"] }
-tokio = { workspace = true }
-lib_core = { workspace = true }
-services = { path = "crates/services" }
 
 [patch.crates-io]
 reqwest = { git = 'https://github.com/cxw620/lib_reqwest.git', rev = 'ed9dbc7649f53cd18b5bdfe88173064c95bd6b78' }
