@@ -1,4 +1,5 @@
 pub mod playurl;
+pub mod test;
 
 use anyhow::Result;
 use axum::extract::Request as AxumRequest;

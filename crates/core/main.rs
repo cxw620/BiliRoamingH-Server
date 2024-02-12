@@ -2,10 +2,7 @@ extern crate services;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use services::{
-    handler::{playurl::PlayurlRouter, InterceptHandler},
-    RouterTest,
-};
+use services::handler::{playurl::PlayurlRouter, test::RouterTest, InterceptHandler};
 
 #[tokio::main]
 async fn main() {

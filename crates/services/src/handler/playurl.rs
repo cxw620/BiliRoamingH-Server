@@ -1,7 +1,8 @@
+use anyhow::Result;
 use axum::routing::MethodRouter;
 use serde_json::json;
 
-use crate::{axum_response, GeneralResponse, HandlerFuture, ServiceResult};
+use crate::{axum_response, HandlerFuture};
 use lib_utils::url::QueryMap;
 
 pub struct PlayurlRouter;
@@ -52,7 +53,7 @@ impl PlayurlHandler {
     pub async fn get_playurl(
         &self,
         req: axum::extract::Request,
-    ) -> ServiceResult<serde_json::Value> {
+    ) -> Result<serde_json::Value> {
         let query_map = QueryMap::try_from_req(&req)?;
         // TODO implement get playurl
         Ok(json!({
