@@ -6,3 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# Dev deps
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+# Basic deps
+serde = { workspace = true }
+
+# Local lib
+lib_utils = { workspace = true }

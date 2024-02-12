@@ -90,6 +90,7 @@ tracing-subscriber = { workspace = true }
 # Business deps
 axum = { workspace = true, features = ["default", "http2", "json"] }
 tokio = { workspace = true }
+lib_core = { workspace = true }
 services = { path = "crates/services" }
 
 [patch.crates-io]
