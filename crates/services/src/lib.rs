@@ -1,12 +1,13 @@
+pub mod handler;
+pub mod intercept;
 mod model;
-pub mod playurl;
 
 use anyhow::anyhow;
 use axum::response::IntoResponse;
 use bytes::{BufMut, BytesMut};
 use http::{header, HeaderValue};
 use serde::{Deserialize, Serialize};
-use tracing::{error, warn};
+use tracing::error;
 
 use lib_utils::error::{ServerError, ServerErrorExt, TError};
 
@@ -104,25 +105,6 @@ macro_rules! axum_response {
     ($result:expr, $data_only:expr) => {
         GeneralResponse::new_from_result($result).into_response($data_only)
     };
-}
-
-#[derive(Clone)]
-pub struct DefaultHandler;
-
-impl<T, S> axum::handler::Handler<T, S> for DefaultHandler {
-    type Future = HandlerFuture;
-
-    fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
-        Box::pin(async move {
-            let req_uri = req.uri();
-            warn!(
-                "Detect unknown path [{}] with query [{:?}].",
-                req_uri.path(),
-                req_uri.query()
-            );
-            ServerError::ServicesUnsupported.into_response()
-        })
-    }
 }
 
 #[derive(Default)]

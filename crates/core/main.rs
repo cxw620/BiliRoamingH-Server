@@ -2,7 +2,10 @@ extern crate services;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use services::{DefaultHandler, RouterTest, playurl::PlayurlRouter};
+use services::{
+    handler::{playurl::PlayurlRouter, InterceptHandler},
+    RouterTest,
+};
 
 #[tokio::main]
 async fn main() {
@@ -11,8 +14,7 @@ async fn main() {
     let app = axum::Router::new()
         .merge(PlayurlRouter::new())
         .nest("/test", RouterTest::new())
-        .route("/favicon.ico", axum::routing::any(|| async { axum::http::StatusCode::NOT_FOUND }))
-        .fallback::<_, ()>(DefaultHandler);
+        .fallback::<_, ()>(InterceptHandler::default());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:2663").await.unwrap();
     axum::serve(listener, app).await.unwrap();

@@ -1,7 +1,7 @@
 use axum::routing::MethodRouter;
 use serde_json::json;
 
-use super::{axum_response, GeneralResponse, HandlerFuture, ServiceResult};
+use crate::{axum_response, GeneralResponse, HandlerFuture, ServiceResult};
 use lib_utils::url::QueryMap;
 
 pub struct PlayurlRouter;
