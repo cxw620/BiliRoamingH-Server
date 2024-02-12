@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ErrorResponse {
@@ -328,7 +328,12 @@ impl<'e> TError<'e> for ServerErrorExt {
                 } else if let Some(e) = source.downcast_ref::<ServerError>() {
                     e.e_message()
                 } else {
-                    error!("Unknown anyhow error: {:?}", source);
+                    error!("Unknown anyhow error: {}", &source);
+                    // ! Generating backtrace is REALLY EXPENSIVE,
+                    // ! DO NOT CALL IN RELEASE MODE.
+                    // ! If you want only panics to have backtraces, 
+                    // ! set RUST_BACKTRACE=1 and RUST_LIB_BACKTRACE=0.
+                    debug!("###### ANYHOW ERR ######\n{}\n###### BACK TRACE ######", source.backtrace());
                     "服务器内部错误".into()
                 }
             }
