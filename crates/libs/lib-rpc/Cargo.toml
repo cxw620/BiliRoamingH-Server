@@ -8,10 +8,22 @@ rust-version.workspace = true
 [dependencies]
 # Dev deps
 anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Basic deps
+http-02 = { workspace = true }
+url = { workspace = true }
 
 # Business deps
-tonic = { workspace = true, features = ["gzip"] }
+# axum = { workspace = true, optional = true }
+# tonic = { workspace = true, features = ["gzip"] }
 
 # Local deps
+lib_bilibili = { workspace = true, optional = true }
 lib_rpc_client = { workspace = true }
 lib_utils = { workspace = true }
+
+[features]
+default = []
+request = ["lib_rpc_client/full", "dep:lib_bilibili"]
