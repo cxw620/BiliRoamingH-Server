@@ -12,6 +12,8 @@ async fn main() {
 
     tracing::info!("Starting...");
 
+    init_env();
+
     init_config();
 
     let app = axum::Router::new()
@@ -52,4 +54,11 @@ fn init_tracing() {
         .with(tracing_layer)
         .with(fmt::layer())
         .init();
+}
+
+#[tracing::instrument]
+fn init_env() {
+    if let Err(e) = dotenvy::dotenv() {
+        tracing::error!("Failed to load .env file: {}", e);
+    };
 }

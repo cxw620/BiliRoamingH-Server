@@ -12,6 +12,7 @@ name = "biliroamingh_rust_server"
 
 [dependencies]
 # Dev deps
+dotenvy = "0.15"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
