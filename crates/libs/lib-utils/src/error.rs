@@ -1,31 +1,21 @@
-use std::borrow::Cow;
-
-use axum::response::IntoResponse;
-use serde::{Deserialize, Serialize};
+use axum::response::{IntoResponse, Response as AxumResponse};
 use tracing::{debug, error};
 
-#[derive(Serialize, Deserialize, Clone)]
-struct ErrorResponse {
-    pub code: i64,
-    pub message: String,
-}
+use std::{borrow::Cow, error::Error as StdError};
 
-pub trait TError<'e>: Sized + std::error::Error {
+use crate::model::response::GeneralResponse;
+
+pub trait TError<'e>: Sized + StdError {
     fn e_code(&self) -> i64 {
         5_500_000
     }
-    fn e_message(&'e self) -> std::borrow::Cow<'e, str> {
+
+    fn e_message(&'e self) -> Cow<'e, str> {
         Cow::Borrowed("服务器内部错误")
     }
-    // fn e_json(&self) -> String {
-    //     r#"{{"code": 5500000, "message": "服务器内部错误"}}"#.to_owned()
-    // }
-    fn e_response(&'e self) -> axum::response::Response {
-        axum::response::Json(ErrorResponse {
-            code: self.e_code(),
-            message: self.e_message().to_string(),
-        })
-        .into_response()
+
+    fn e_response(&'e self) -> AxumResponse {
+        GeneralResponse::<()>::new_error(self.e_code(), self.e_message()).into_response(false)
     }
 }
 

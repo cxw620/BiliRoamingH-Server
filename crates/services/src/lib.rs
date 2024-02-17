@@ -8,9 +8,9 @@ pub type HandlerFuture =
 #[macro_export]
 macro_rules! axum_response {
     ($result:expr) => {
-        crate::model::GeneralResponse::new_from_result($result).into_response(false)
+        lib_utils::model::response::GeneralResponse::from($result).into_response(false)
     };
     ($result:expr, $data_only:expr) => {
-        crate::model::GeneralResponse::new_from_result($result).into_response($data_only)
+        lib_utils::model::response::GeneralResponse::from($result).into_response($data_only)
     };
 }

@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 
-use crate::{model::GeneralResponse, HandlerFuture};
+use crate::{axum_response, HandlerFuture};
 use lib_utils::error::{ServerError, ServerErrorExt};
 
 #[derive(Default)]
@@ -39,7 +39,7 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
                     Err(anyhow!(ServerError::ServerInternalNotImpl))
                 }
             };
-            GeneralResponse::new_from_result(data).into_response(false)
+            axum_response!(data)
         })
     }
 }

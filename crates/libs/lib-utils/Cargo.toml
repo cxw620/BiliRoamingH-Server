@@ -15,6 +15,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 # Basic deps
+bytes = { workspace = true }
 base64 = { workspace = true }
 # const-hex = "1"
 fluent-uri = "0.1.4"
@@ -26,6 +27,7 @@ prost = { workspace = true }
 prost-types = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = "0.10"
 urlencoding = "2.1"
 
@@ -39,4 +41,3 @@ tracing-opentelemetry = { workspace = true }
 
 # Local libs
 lib_bilibili = { workspace = true }
-
