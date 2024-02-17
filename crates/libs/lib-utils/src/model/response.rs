@@ -3,7 +3,6 @@ use axum::response::IntoResponse;
 use bytes::{BufMut, BytesMut};
 use http::{header, HeaderValue};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 use std::{collections::HashMap, fmt::Debug as StdDebug};
 
@@ -37,7 +36,6 @@ impl<T: StdDebug + Serialize> Default for GeneralResponse<T> {
 }
 
 impl<T: StdDebug + Serialize> IntoResponse for GeneralResponse<T> {
-    #[tracing::instrument(level = "debug", name = "GeneralResponse into_response")]
     fn into_response(self) -> axum::response::Response {
         self.into_response(false)
     }
@@ -65,6 +63,7 @@ impl<T: StdDebug + Serialize> GeneralResponse<T> {
     }
 
     /// Create a new [GeneralResponse] with error tracing infos.
+    #[tracing::instrument(skip_all)]
     pub fn new_error(code: i64, message: impl ToString) -> Self {
         let mut response = Self {
             code,
@@ -89,6 +88,7 @@ impl<T: StdDebug + Serialize> GeneralResponse<T> {
     /// Customly implement [IntoResponse] for [`GeneralResponse`].
     ///
     /// For historical reason, sometimes non standard response with only `data` is required.
+    #[tracing::instrument(skip(self))]
     pub fn into_response(self, data_only: bool) -> axum::response::Response {
         let mut buf = BytesMut::with_capacity(128).writer();
         if data_only && self.code == 0 {
@@ -98,7 +98,7 @@ impl<T: StdDebug + Serialize> GeneralResponse<T> {
         }
         .map_or_else(
             |e| {
-                error!("serde_json::to_writer error: {}", e);
+                tracing::error!("serde_json::to_writer error: {}", e);
                 ServerError::Serialization.into_response()
             },
             |_| {

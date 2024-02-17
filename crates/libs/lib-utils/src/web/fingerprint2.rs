@@ -11,7 +11,6 @@
 use anyhow::Result;
 use std::io::{Cursor, ErrorKind, Read};
 use std::ops::Shl;
-use tracing::error;
 
 use crate::error::ServerError;
 
@@ -30,7 +29,7 @@ impl BuvidFp {
     /// ```
     pub fn gen(key: &str, seed: u32) -> Result<String> {
         let m = murmur3_x64_128(&mut Cursor::new(key), seed).map_err(|e| {
-            error!("Failed to generate buvid_fp: {}", e);
+            tracing::error!("Failed to generate buvid_fp: {}", e);
             ServerError::General
         })?;
         Ok(format!("{:016x}{:016x}", m & ((1 << 64) - 1), m >> 64))

@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
 use tonic::metadata::MetadataMap;
-use tracing::warn;
 
 use std::fmt::Write;
 
@@ -335,7 +334,7 @@ impl ManagedHeaderMap {
         let value = match value.try_into() {
             Ok(value) => value,
             Err(_) => {
-                warn!(
+                tracing::warn!(
                     "Given value of [{}] cannot be converted to http::HeaderValue, use default value instead",
                     key.str()
                 );
@@ -414,12 +413,12 @@ impl ManagedHeaderMap {
         macro_rules! check_if_exist {
             ($key:expr) => {
                 if (!self.contains_key($key)) {
-                    warn!("Header [{}] is not set", $key.str())
+                    tracing::warn!("Header [{}] is not set", $key.str())
                 }
             };
             ($precondition:expr, $key:expr) => {
                 if ($precondition && !self.contains_key($key)) {
-                    warn!("Header [{}] is not set", $key.str())
+                    tracing::warn!("Header [{}] is not set", $key.str())
                 }
             };
         }
@@ -429,7 +428,7 @@ impl ManagedHeaderMap {
                     if cfg!(debug_assertions) {
                         panic!("Header [{}] is not set", $key.str())
                     } else {
-                        warn!("Header [{}] is not set", $key.str())
+                        tracing::warn!("Header [{}] is not set", $key.str())
                     }
                 }
             };
@@ -438,7 +437,7 @@ impl ManagedHeaderMap {
                     if cfg!(debug_assertions) {
                         panic!("Header [{}] is not set", $key.str())
                     } else {
-                        warn!("Header [{}] is not set", $key.str())
+                        tracing::warn!("Header [{}] is not set", $key.str())
                     }
                 }
             };
@@ -556,7 +555,7 @@ pub fn gen_trace_id() -> String {
 /// 合成 `x-bili-aurora-eid`
 pub fn gen_aurora_eid(uid: u64) -> Option<String> {
     if uid == 0 {
-        warn!("UID is 0, eid will be None");
+        tracing::warn!("UID is 0, eid will be None");
         return None;
     }
     let result_byte = eid_xor(uid.to_string());
@@ -607,7 +606,6 @@ pub(crate) mod user_agent {
     use crate::str_concat;
     use rand::Rng;
     use std::fmt::Write;
-    use tracing::error;
 
     pub trait TUserAgent {
         fn web(&self) -> String;
@@ -728,7 +726,7 @@ pub(crate) mod user_agent {
         pub fn set_app_build(&mut self, app_build: impl Into<String>) -> &mut Self {
             let app_build = app_build.into();
             if app_build.len() != 7 {
-                error!(target: "UniteUA", "Invalid Bilibili APP Build: {}", app_build);
+                tracing::error!(target: "UniteUA", "Invalid Bilibili APP Build: {}", app_build);
                 return self;
             }
             let mut app_ver = String::with_capacity(16);
@@ -744,12 +742,13 @@ pub(crate) mod user_agent {
             self.inner.app_ver = app_ver;
             self
         }
+
         /// Set Bilibili APP Version, will **also** set APP Build
         pub fn set_app_ver(&mut self, app_ver: impl Into<String>) -> &mut Self {
             let app_ver: String = app_ver.into();
             let app_build_vec: Vec<&str> = app_ver.split(".").collect();
             if app_build_vec.len() < 3 {
-                error!(target: "UniteUA", "Invalid Bilibili APP Version: {}", app_ver);
+                tracing::error!(target: "UniteUA", "Invalid Bilibili APP Version: {}", app_ver);
                 return self;
             }
             let mut app_build = String::with_capacity(16);

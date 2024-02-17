@@ -62,7 +62,7 @@ macro_rules! av2bv {
     ($avid:expr) => {{
         use log::error;
         lib_utils::avbvc::av2bv($avid).map_err(|e| {
-            error!(target: "AVBVC", "Failed to convert AID '{}' to BVID: {}", $avid, e);
+            tracing::error!(target: "AVBVC", "Failed to convert AID '{}' to BVID: {}", $avid, e);
         }).unwrap_or(String::new())
     }};
 }
@@ -111,7 +111,7 @@ macro_rules! bv2av {
     ($bvid:expr) => {{
         use log::error;
         lib_utils::avbvc::bv2av($bvid).map_err(|e| {
-            error!(target: "AVBVC", "Failed to convert BVID '{}' to AID: {}", $bvid, e);
+            tracing::error!(target: "AVBVC", "Failed to convert BVID '{}' to AID: {}", $bvid, e);
         }).unwrap_or(0)
     }};
 }

@@ -1,5 +1,4 @@
 use axum::response::{IntoResponse, Response as AxumResponse};
-use tracing::{debug, error};
 
 use std::{borrow::Cow, error::Error as StdError};
 
@@ -278,8 +277,7 @@ impl<'e> TError<'e> for ServerError {
 }
 
 impl IntoResponse for ServerError {
-    #[tracing::instrument(level = "error", name="ServerError into_response")]
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> AxumResponse {
         self.e_response()
     }
 }
@@ -319,15 +317,7 @@ impl<'e> TError<'e> for ServerErrorExt {
                 } else if let Some(e) = source.downcast_ref::<ServerError>() {
                     e.e_message()
                 } else {
-                    error!("Unknown anyhow error: {}", &source);
-                    // ! Generating backtrace is REALLY EXPENSIVE,
-                    // ! DO NOT CALL IN RELEASE MODE.
-                    // ! If you want only panics to have backtraces,
-                    // ! set RUST_BACKTRACE=1 and RUST_LIB_BACKTRACE=0.
-                    debug!(
-                        "###### ANYHOW ERR ######\n{}\n###### BACK TRACE ######",
-                        source.backtrace()
-                    );
+                    tracing::error!("Unknown anyhow error: {}", &source);
                     "服务器内部错误".into()
                 }
             }
@@ -337,14 +327,13 @@ impl<'e> TError<'e> for ServerErrorExt {
 }
 
 impl IntoResponse for ServerErrorExt {
-    #[tracing::instrument(level = "error", name="ServerErrorExt into_response")]
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> AxumResponse {
         self.e_response()
     }
 }
 
 impl From<anyhow::Error> for ServerErrorExt {
-    #[tracing::instrument(level = "error", name="ServerErrorExt from anyhow::Error")]
+    #[tracing::instrument(level = "error", name = "ServerErrorExt from anyhow::Error")]
     fn from(e: anyhow::Error) -> Self {
         if let Some(server_error) = e.downcast_ref() {
             return Self::Server(*server_error);
@@ -353,8 +342,7 @@ impl From<anyhow::Error> for ServerErrorExt {
             return (bili_error.to_owned()).into();
         }
         if let Some(header_error) = e.downcast_ref::<HeaderError>() {
-            // TODO: Trace error using open-telemetry here
-            error!("Detect HeaderError: {:?}", header_error);
+            tracing::error!("Detect HeaderError: {:?}", header_error);
             return Self::Server(ServerError::General);
         }
         Self::Any { source: e }
@@ -560,7 +548,7 @@ impl From<BiliError> for ServerErrorExt {
     fn from(value: BiliError) -> Self {
         let server_error = match value {
             BiliError::Ok => {
-                error!("BiliError::Ok is not error!");
+                tracing::error!("BiliError::Ok is not error!");
                 ServerError::General
             }
             BiliError::ApiFatal => ServerError::RpcReqApiFatal,
@@ -612,7 +600,7 @@ impl From<tonic::Status> for ServerErrorExt {
                         let e_code = bili_rpc_status.code as i64;
                         let e_message = bili_rpc_status.message;
                         let e_details = bili_rpc_status.details;
-                        error!(
+                        tracing::error!(
                             "gRPC Uptream Error: code={}, message={}, details={:?}",
                             e_code, e_message, e_details
                         );
@@ -629,7 +617,7 @@ impl From<tonic::Status> for ServerErrorExt {
                         };
                     }
                 }
-                error!("Unknown gRPC Uptream Error: {:?}", e);
+                tracing::error!("Unknown gRPC Uptream Error: {:?}", e);
                 Self::Server(ServerError::GrpcReqUnknown)
             }
             _ => Self::Server(ServerError::from(grpc_code as i64 + 5_502_900)),
