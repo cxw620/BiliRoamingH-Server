@@ -4,11 +4,8 @@ use http_02::{Request as HttpRequest, Response as HttpResponse};
 
 use std::{future::Future, pin::Pin, sync::OnceLock, task::Poll, time::Duration};
 
-use crate::{
-    utils::ManagedHeaderMap,
-    grpc::{connect_http02::Connector, proxy::Proxy},
-    CrateError,
-};
+use super::{connect_http02::Connector, proxy::Proxy};
+use crate::{utils::ManagedHeaderMap, CrateError};
 
 type GrpcClient = hyper_014::Client<Connector, tonic::body::BoxBody>;
 
@@ -93,7 +90,7 @@ pub fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
 }
 
 /// A ClientExt for outgoing gRPC requests.
-/// 
+///
 /// Should not reuse this since headers will be taken and cleared after each request.
 pub struct GrpcClientExt<'c> {
     proxy: Option<&'c str>,
@@ -104,7 +101,11 @@ pub struct GrpcClientExt<'c> {
 impl<'c> GrpcClientExt<'c> {
     #[inline]
     pub fn new(proxy: Option<&'c str>, headers: ManagedHeaderMap) -> Self {
-        Self { proxy, headers, used: false }
+        Self {
+            proxy,
+            headers,
+            used: false,
+        }
     }
 
     #[inline]
@@ -124,7 +125,7 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
         Poll::Ready(Ok(()))
     }
 
-    #[tracing::instrument(skip(self), level = "debug", name="GrpcClientExt")]
+    #[tracing::instrument(skip(self), level = "debug", name = "GrpcClientExt")]
     fn call(&mut self, mut req: GrpcRequest) -> Self::Future {
         // Deal with original HeaderMap
         let header_map = {
@@ -148,9 +149,7 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
 
         if self.used {
             tracing::error!("GrpcClientExt should not be reused");
-            return Box::pin(async move {
-                Err(CrateError::General(anyhow!("GrpcClientExt should not be reused")))
-            });
+            return Box::pin(async move { Err(CrateError::Unknown) });
         }
 
         Box::pin(async move {
@@ -284,7 +283,7 @@ mod test {
         let h3 = tokio::spawn(async {
             test_custom_client(Some("http://127.0.0.1:20033")).await;
         });
-        
+
         let h4 = tokio::spawn(async {
             test_custom_client(Some("http://127.0.0.1:20033")).await;
         });

@@ -26,8 +26,8 @@ use std::time::Duration;
 
 #[cfg(feature = "__rustls")]
 use self::rustls_tls_conn::RustlsTlsConn;
+use super::proxy::{Proxy, ProxyScheme};
 use crate::error::BoxError;
-use crate::grpc::proxy::{Proxy, ProxyScheme};
 
 pub(crate) type HttpConnector = hyper_014::client::HttpConnector;
 
@@ -571,8 +571,8 @@ mod socks {
     use tokio::net::TcpStream;
     use tokio_socks::tcp::Socks5Stream;
 
+    use super::ProxyScheme;
     use super::{BoxError, Scheme};
-    use crate::grpc::proxy::ProxyScheme;
 
     pub(super) enum DnsResolve {
         Local,
@@ -791,7 +791,7 @@ mod verbose {
 #[cfg(test)]
 mod tests {
     use super::tunnel;
-    use crate::grpc::proxy;
+    use super::super::proxy;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;

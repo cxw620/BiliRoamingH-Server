@@ -201,11 +201,11 @@ impl<'c> RestRequestBuilder<'c> {
     /// Build RestRequest
     #[inline]
     pub fn build(self) -> Result<RestRequest<'c>> {
-        let url = self
-            .url
-            .expect("url is required for RestRequest")
-            .parse()
-            .map_err(|e| CrateError::from(e))?;
+        let url = self.url.expect("url is required for RestRequest");
+        let url = url.parse().map_err(|e| CrateError::UrlParse {
+            url: url.to_owned(),
+            source: e,
+        })?;
 
         Ok(RestRequest {
             proxy: self.proxy,

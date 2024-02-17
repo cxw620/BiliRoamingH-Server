@@ -4,21 +4,8 @@ use percent_encoding::percent_decode;
 use std::{borrow::Cow, net::SocketAddr};
 use url::Url;
 
+use crate::error::ProxyError;
 use lib_utils::{b64_encode, str_concat};
-
-#[derive(Debug, thiserror::Error)]
-pub enum ProxyError {
-    #[error(transparent)]
-    ResolveSocksIo(#[from] std::io::Error),
-    #[error(transparent)]
-    InvalidUri(#[from] http_02::uri::InvalidUri),
-    #[error(transparent)]
-    UrlParse(#[from] url::ParseError),
-    #[error("Invalid proxy scheme [{0:?}]")]
-    InvalidProxyScheme(Option<String>),
-    #[error("Invalid proxy host [{0:?}]")]
-    InvalidProxyHost(Option<String>),
-}
 
 #[derive(Clone, Debug)]
 pub struct Proxy {
@@ -81,7 +68,7 @@ pub enum ProxyScheme {
 impl ProxyScheme {
     #[tracing::instrument]
     fn parse(url: &str) -> Result<Self> {
-        let url = Url::parse(url).map_err(|e| anyhow!(ProxyError::from(e)))?;
+        let url = Url::parse(url).map_err(|e| ProxyError::from(e))?;
 
         // Resolve URL to a host and port
         #[cfg(feature = "socks")]
@@ -112,13 +99,13 @@ impl ProxyScheme {
                 auth: encode_basic_auth(auth_info),
                 host: (&url[Position::BeforeHost..Position::AfterPort])
                     .parse()
-                    .map_err(|e| anyhow!(ProxyError::from(e)))?,
+                    .map_err(|e| ProxyError::from(e))?,
             },
             "https" => Self::Https {
                 auth: encode_basic_auth(auth_info),
                 host: (&url[Position::BeforeHost..Position::AfterPort])
                     .parse()
-                    .map_err(|e| anyhow!(ProxyError::from(e)))?,
+                    .map_err(|e| ProxyError::from(e))?,
             },
             #[cfg(feature = "socks")]
             "socks5" => Self::Socks5 {

@@ -1,11 +1,12 @@
 use anyhow::{bail, Result};
 use bytes::Bytes;
+use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
 use serde::{Deserialize, Serialize};
 
 use crate::{BiliError, CrateError};
 
+#[cfg(feature = "full")]
 pub(crate) use lib_utils::headers::ManagedHeaderMap;
-
 
 // ==================== impl ResponseExt ====================
 
@@ -23,7 +24,7 @@ pub struct BiliResponse<T: Serialize = serde_json::Value> {
 impl<T: Serialize> Default for BiliResponse<T> {
     fn default() -> Self {
         Self {
-            code: 5500900,
+            code: 5_500_900,
             message: String::new(),
             ttl: 1,
             data: None,
@@ -48,7 +49,7 @@ pub struct ResponseExt<H, D> {
 /// Raw response from upstream with original response.
 pub type RawResponseExt = ResponseExt<(), reqwest::Response>;
 /// Consumed response from upstream.
-pub type ConsumedResponseExt<D = serde_json::Value> = ResponseExt<http_02::HeaderMap, Option<D>>;
+pub type ConsumedResponseExt<D = serde_json::Value> = ResponseExt<HttpHeaderMap, Option<D>>;
 
 impl<H, T> ResponseExt<H, T> {
     pub fn new(
@@ -244,12 +245,12 @@ impl RawResponseExt {
 
 impl<D> ConsumedResponseExt<D> {
     /// Get response header
-    pub fn get_header(&self, key: &str) -> Option<&reqwest::header::HeaderValue> {
+    pub fn get_header(&self, key: &str) -> Option<&HttpHeaderValue> {
         self.resp_headers.get(key)
     }
 
     /// Get response headers ref
-    pub fn headers(&self) -> &reqwest::header::HeaderMap {
+    pub fn headers(&self) -> &HttpHeaderMap {
         &self.resp_headers
     }
 
@@ -281,7 +282,7 @@ impl<D> ConsumedResponseExt<D> {
     ) -> (
         reqwest::Request,
         Option<String>,
-        http_02::HeaderMap, // compatibility for reqwest with dep:http v0.2
+        HttpHeaderMap, // compatibility for reqwest with dep:http v0.2
         Option<D>,
     ) {
         (self.o_req, self.o_proxy, self.resp_headers, self.resp_data)
@@ -289,6 +290,7 @@ impl<D> ConsumedResponseExt<D> {
 }
 
 // xor-shift
+#[cfg(feature = "full")]
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn fast_random() -> u64 {
     use std::cell::Cell;

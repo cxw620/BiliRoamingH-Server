@@ -8,43 +8,32 @@ rust-version.workspace = true
 [dependencies]
 # Dev deps
 anyhow = { workspace = true }
-async-trait = "0.1"
 bytes = { workspace = true }
-log = "0.4"
-pin-project-lite = "0.2"
+log = { version = "0.4", optional = true }
+pin-project-lite = { version = "0.2", optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-
 # Basic deps
-base64 = { workspace = true }
-dashmap = "5.5"
-http-02 = { workspace = true }       # compatibility
-http-body-04 = { workspace = true }  # compatibility
-hyper-014 = { workspace = true }     # compatibility
-percent-encoding = "2"
+base64 = { workspace = true, optional = true }
+dashmap = { version = "5.5", optional = true }
+http-02 = { workspace = true }                        # compatibility
+http-body-04 = { workspace = true, optional = true }  # compatibility
+hyper-014 = { workspace = true }                      # compatibility
+percent-encoding = { version = "2", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-tower = { workspace = true }
-tower-service = { workspace = true }
+tokio = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-service = { workspace = true, optional = true }
 url = { workspace = true }
 
 # Business deps
-reqwest = { workspace = true, features = [
-    "blocking",
-    "socks",
-    "brotli",
-    "gzip",
-    "deflate",
-    "rustls-tls",
-    "json",
-    "cookies",
-] }
-tonic = { workspace = true, features = ["gzip"] }
+reqwest = { workspace = true }
+tonic = { workspace = true }
 
 # Local libs
-lib_bilibili = { workspace = true }
+lib_bilibili = { workspace = true, optional = true }
 lib_utils = { workspace = true }
 
 # Optional deps...
@@ -63,13 +52,18 @@ tokio-socks = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
-tonic = { workspace = true }
 
 [features]
-default = ["rustls-tls", "proxy"]
+default = ["simple_lib"]
 
-proxy = ["socks"]
-socks = ["tokio-socks"]
+# Simple feature for basic usage
+simple_lib = ["reqwest/json"]
+# Full feature for main usage
+full = ["__reqwest_ext", "__tonic_ext", "__deps_ext"]
+
+# ============= Inner feature =============
+
+__tls = [] # TLS backend should be always enabled
 
 # TLS Feature
 # TODO: may add native TLS backend
@@ -77,11 +71,7 @@ rustls-tls = ["rustls-tls-webpki-roots"]
 rustls-tls-webpki-roots = ["webpki-roots", "__rustls"]
 # rustls-tls-native-roots = ["rustls-native-certs", "__rustls"]
 
-# ============= Inner feature =============
-
-__tls = [] # TLS backend should be always enabled
-
-# Enables common rustls code.
+## Enables common rustls code.
 __rustls = [
     "hyper-rustls",
     "tokio-rustls",
@@ -90,3 +80,35 @@ __rustls = [
     "dep:rustls-pemfile",
     # "rustls-pki-types",
 ]
+
+# Extend features for reqwest
+__reqwest_ext = [
+    "reqwest/blocking",
+    "reqwest/socks",
+    "reqwest/brotli",
+    "reqwest/gzip",
+    "reqwest/deflate",
+    "reqwest/rustls-tls",
+    "reqwest/cookies",
+]
+
+# Extend features for tonic
+__tonic_ext = ["tonic/gzip", "rustls-tls", "proxy"]
+
+# Optional deps
+__deps_ext = [
+    "dep:log",
+    "dep:pin-project-lite",
+    "dep:base64",
+    "dep:dashmap",
+    "dep:http-body-04",
+    "dep:percent-encoding",
+    "dep:tokio",
+    "dep:tower",
+    "dep:tower-service",
+    "dep:lib_bilibili",
+]
+
+# Proxy Feature
+proxy = ["socks"]
+socks = ["tokio-socks"]

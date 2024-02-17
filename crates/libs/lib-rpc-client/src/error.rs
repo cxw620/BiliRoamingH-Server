@@ -1,3 +1,4 @@
+#[cfg(feature = "full")]
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, thiserror::Error)]
@@ -7,18 +8,16 @@ pub enum Error {
     Hyper(#[from] hyper_014::Error),
 
     #[error(transparent)]
-    Reqwest {
-        #[from]
-        source: reqwest::Error,
-    },
+    Reqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
     GrpcStatus(#[from] tonic::Status),
 
-    #[error(transparent)]
+    #[error("Parsing [{url}] error: {:?}", source)]
     /// Error when parsing url
     UrlParse {
-        #[from]
+        url: String,
+        #[source]
         source: url::ParseError,
     },
 
@@ -34,21 +33,33 @@ pub enum Error {
     #[error("Received unknown data struct")]
     UnknownDataStruct,
 
+    #[error(transparent)]
+    ProxyError(#[from] ProxyError),
+
     /// BiliError passed through
     #[error(transparent)]
     BiliError(#[from] lib_utils::error::BiliError),
 
-    /// General Error type for overall error handling
+    /// Unknown error or private error
+    #[error("Unknown error")]
+    Unknown,
+
+    /// Upstream error wrapped with `anyhow`,
+    /// should downcast to actual one
     #[error(transparent)]
-    General(#[from] anyhow::Error),
+    Any(#[from] anyhow::Error),
 }
 
-impl Into<tonic::Status> for Error {
-    #[tracing::instrument(level = "error", name="RpcClient Error into_response")]
-    fn into(self) -> tonic::Status {
-        match self {
-            Error::GrpcStatus(status) => status,
-            _ => tonic::Status::internal(self.to_string()),
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum ProxyError {
+    #[error(transparent)]
+    ResolveSocksIo(#[from] std::io::Error),
+    #[error(transparent)]
+    InvalidUri(#[from] http_02::uri::InvalidUri),
+    #[error(transparent)]
+    UrlParse(#[from] url::ParseError),
+    #[error("Invalid proxy scheme [{0:?}]")]
+    InvalidProxyScheme(Option<String>),
+    #[error("Invalid proxy host [{0:?}]")]
+    InvalidProxyHost(Option<String>),
 }
