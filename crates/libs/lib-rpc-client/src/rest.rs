@@ -19,6 +19,7 @@ static CLIENTS: OnceLock<DashMap<&'static str, reqwest::Client>> = OnceLock::new
 /// Init Clients with given proxies url.
 ///
 /// Return error if CLIENTS is already inited.
+#[tracing::instrument]
 pub fn init_reqwest_clients(proxies: Vec<&'static str>) -> Result<()> {
     let map = dashmap::DashMap::with_capacity(16);
 
@@ -37,6 +38,7 @@ pub fn init_reqwest_clients(proxies: Vec<&'static str>) -> Result<()> {
 }
 
 /// Generate reqwest::Client with given proxy
+#[tracing::instrument]
 fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
     let mut builder = Client::builder()
         .use_rustls_tls()
@@ -66,6 +68,7 @@ fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
 }
 
 /// Get reqwest::Client from CLIENTS cache or new one with given proxy
+#[tracing::instrument]
 fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
     let clients = CLIENTS.get_or_init(|| {
         tracing::warn!("CLIENTS should be initialized before get_client!!!");

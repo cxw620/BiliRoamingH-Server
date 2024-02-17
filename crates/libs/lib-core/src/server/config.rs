@@ -14,6 +14,8 @@ pub static CONFIG_SERVER: OnceLock<ServerConfigServer> = OnceLock::new();
 
 #[tracing::instrument]
 pub fn init_config() {
+    tracing::info!("Initializing server config...");
+
     let _ = CONFIG_SERVER.set(ServerConfigServer::default());
 }
 

@@ -21,6 +21,14 @@ tokio = { workspace = true }
 lib_core = { workspace = true }
 services = { path = "crates/services" }
 
+# open-telemetry
+axum-tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-jaeger = { workspace = true, features = ["rt-tokio"] }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
+# opentelemetry-stdout = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+
 [profile.release]
 opt-level = 3
 debug = false
@@ -75,7 +83,7 @@ prost-types = "0.12"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.35", features = ["full", "tracing"] }
 tower = "0.4"
 tower-service = "0.3"
 url = "2.5"
@@ -84,6 +92,14 @@ url = "2.5"
 axum = { version = "0.7", default-features = false }
 reqwest = { version = "0.11", default-features = false }
 tonic = { version = "0.11", default-features = false }
+
+# open-telemetry
+axum-tracing-opentelemetry = "0.17.0"
+opentelemetry = "0.21"
+opentelemetry-jaeger = "0.20.0"
+opentelemetry_sdk = "0.21"
+opentelemetry-stdout = { version = "0.2.0", features = ["trace"] }
+tracing-opentelemetry = "0.22.0"
 
 # Local libs
 lib_core = { path = "crates/libs/lib-core" }

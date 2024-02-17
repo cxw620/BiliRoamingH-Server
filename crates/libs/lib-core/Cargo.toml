@@ -13,5 +13,13 @@ tracing = { workspace = true }
 # Basic deps
 serde = { workspace = true }
 
+# open-telemetry
+axum-tracing-opentelemetry = { workspace = true }
+# opentelemetry = { workspace = true }
+# opentelemetry-jaeger = { workspace = true, features = ["rt-tokio"] }
+# opentelemetry_sdk = { workspace = true }
+# opentelemetry-stdout = { workspace = true }
+# tracing-opentelemetry = { workspace = true }
+
 # Local lib
 lib_utils = { workspace = true }

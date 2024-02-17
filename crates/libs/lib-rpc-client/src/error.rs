@@ -44,6 +44,7 @@ pub enum Error {
 }
 
 impl Into<tonic::Status> for Error {
+    #[tracing::instrument(level = "error", name="RpcClient Error into_response")]
     fn into(self) -> tonic::Status {
         match self {
             Error::GrpcStatus(status) => status,

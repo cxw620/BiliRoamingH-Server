@@ -75,7 +75,7 @@ impl<H, T> ResponseExt<H, T> {
 }
 
 impl RawResponseExt {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self), ret)]
     fn check_response_status(&self) -> Result<()> {
         let status = self.resp_data.status();
         if status.is_client_error() || status.is_server_error() {

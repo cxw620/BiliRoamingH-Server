@@ -17,6 +17,7 @@ static CLIENTS: OnceLock<DashMap<&'static str, GrpcClient>> = OnceLock::new();
 /// Init Clients with given proxies url.
 ///
 /// Return error if CLIENTS is already inited.
+#[tracing::instrument]
 pub fn init_grpc_client(proxies: Vec<&'static str>) -> Result<()> {
     let map = DashMap::with_capacity(16);
 
@@ -36,6 +37,7 @@ pub fn init_grpc_client(proxies: Vec<&'static str>) -> Result<()> {
     Ok(())
 }
 
+#[tracing::instrument]
 fn gen_client(proxies: Option<Proxy>) -> Result<GrpcClient> {
     let proxies = proxies.map_or(vec![], |p| vec![p]);
 
@@ -122,6 +124,7 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
         Poll::Ready(Ok(()))
     }
 
+    #[tracing::instrument(skip(self), level = "debug", name="GrpcClientExt")]
     fn call(&mut self, mut req: GrpcRequest) -> Self::Future {
         // Deal with original HeaderMap
         let header_map = {

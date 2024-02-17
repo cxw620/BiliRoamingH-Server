@@ -12,12 +12,13 @@ impl RouterTest {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct TestHandler;
 
 impl<T, S> axum::handler::Handler<T, S> for TestHandler {
     type Future = HandlerFuture;
 
+    #[tracing::instrument(skip(self, _state), name="TestHandler")]
     fn call(self, req: axum::extract::Request, _state: S) -> Self::Future {
         Box::pin(async move {
             let data = match req.uri().path() {

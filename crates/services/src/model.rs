@@ -9,9 +9,9 @@ use tracing::error;
 
 use lib_utils::error::{ServerError, ServerErrorExt, TError};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
-pub struct GeneralResponse<T: Serialize> {
+pub struct GeneralResponse<T: std::fmt::Debug + Serialize> {
     pub code: i64,
     pub message: String,
     pub ttl: i64,
@@ -20,7 +20,7 @@ pub struct GeneralResponse<T: Serialize> {
     pub data: Option<T>,
 }
 
-impl<T: Serialize> Default for GeneralResponse<T> {
+impl<T: std::fmt::Debug + Serialize> Default for GeneralResponse<T> {
     fn default() -> Self {
         Self {
             code: 0,
@@ -31,13 +31,14 @@ impl<T: Serialize> Default for GeneralResponse<T> {
     }
 }
 
-impl<T: Serialize> IntoResponse for GeneralResponse<T> {
+impl<T: std::fmt::Debug + Serialize> IntoResponse for GeneralResponse<T> {
+    #[tracing::instrument(level = "debug", name="GeneralResponse into_response")]
     fn into_response(self) -> axum::response::Response {
         self.into_response(false)
     }
 }
 
-impl<T: Serialize> GeneralResponse<T> {
+impl<T: std::fmt::Debug + Serialize> GeneralResponse<T> {
     /// Create a new [GeneralResponse] with data.
     pub fn new(data: T) -> Self {
         Self {

@@ -42,7 +42,7 @@ pub struct DefaultHandler;
 impl HandlerT for DefaultHandler {
     type Response = AxumResponse;
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip(self), name="DefaultHandler")]
     async fn call(self, req: AxumRequest) -> Result<Self::Response> {
         let req_uri = req.uri();
         let response = match req_uri.path() {
@@ -64,6 +64,7 @@ impl HandlerT for DefaultHandler {
 pub struct InterceptHandler<R: InterceptT = DefaultInterceptor, H: HandlerT = DefaultHandler> {
     pub interceptor: Option<R>,
     pub handler: H,
+    desc: &'static str
 }
 
 impl Default for InterceptHandler {
@@ -71,6 +72,7 @@ impl Default for InterceptHandler {
         InterceptHandler {
             interceptor: None,
             handler: DefaultHandler,
+            desc: "InterceptHandler for default"
         }
     }
 }
@@ -78,6 +80,7 @@ impl Default for InterceptHandler {
 impl<T, S, R: InterceptT, H: HandlerT> axum::handler::Handler<T, S> for InterceptHandler<R, H> {
     type Future = HandlerFuture;
 
+    #[tracing::instrument(skip(self, _state), name="InterceptHandler", fields(intercept.desc=self.desc))]
     fn call(self, mut req: axum::extract::Request, _state: S) -> Self::Future {
         Box::pin(async move {
             if let Some(interceptor) = &self.interceptor {

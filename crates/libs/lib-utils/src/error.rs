@@ -288,6 +288,7 @@ impl<'e> TError<'e> for ServerError {
 }
 
 impl IntoResponse for ServerError {
+    #[tracing::instrument(level = "error", name="ServerError into_response")]
     fn into_response(self) -> axum::response::Response {
         self.e_response()
     }
@@ -331,9 +332,12 @@ impl<'e> TError<'e> for ServerErrorExt {
                     error!("Unknown anyhow error: {}", &source);
                     // ! Generating backtrace is REALLY EXPENSIVE,
                     // ! DO NOT CALL IN RELEASE MODE.
-                    // ! If you want only panics to have backtraces, 
+                    // ! If you want only panics to have backtraces,
                     // ! set RUST_BACKTRACE=1 and RUST_LIB_BACKTRACE=0.
-                    debug!("###### ANYHOW ERR ######\n{}\n###### BACK TRACE ######", source.backtrace());
+                    debug!(
+                        "###### ANYHOW ERR ######\n{}\n###### BACK TRACE ######",
+                        source.backtrace()
+                    );
                     "服务器内部错误".into()
                 }
             }
@@ -343,12 +347,14 @@ impl<'e> TError<'e> for ServerErrorExt {
 }
 
 impl IntoResponse for ServerErrorExt {
+    #[tracing::instrument(level = "error", name="ServerErrorExt into_response")]
     fn into_response(self) -> axum::response::Response {
         self.e_response()
     }
 }
 
 impl From<anyhow::Error> for ServerErrorExt {
+    #[tracing::instrument(level = "error", name="ServerErrorExt from anyhow::Error")]
     fn from(e: anyhow::Error) -> Self {
         if let Some(server_error) = e.downcast_ref() {
             return Self::Server(*server_error);
@@ -517,6 +523,7 @@ pub enum BiliError {
 
 impl TryFrom<(i64, &str)> for BiliError {
     type Error = ();
+    #[tracing::instrument(level = "error", name = "BiliError", ret)]
     fn try_from(value: (i64, &str)) -> Result<Self, ()> {
         let e = match value.0 {
             -1 => Self::ApiFatal,
@@ -559,6 +566,7 @@ impl TryFrom<(i64, &str)> for BiliError {
 }
 
 impl From<BiliError> for ServerErrorExt {
+    #[tracing::instrument(level = "error", name = "ServerErrorExt from BiliError")]
     fn from(value: BiliError) -> Self {
         let server_error = match value {
             BiliError::Ok => {
@@ -601,6 +609,7 @@ use crate::{parse_grpc_any, str_concat};
 use lib_bilibili::bapis::rpc::Status as BiliGrpcStatus;
 
 impl From<tonic::Status> for ServerErrorExt {
+    #[tracing::instrument(level = "error", name = "ServerErrorExt from tonic::Status")]
     fn from(e: tonic::Status) -> Self {
         let grpc_code = e.code();
         match grpc_code {
@@ -643,7 +652,7 @@ impl From<tonic::Status> for ServerErrorExt {
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 /// HeaderError
-/// 
+///
 /// **Internal error, should not exposed to user**
 pub(crate) enum HeaderError {
     #[error("Key [{0}] not exist")]
