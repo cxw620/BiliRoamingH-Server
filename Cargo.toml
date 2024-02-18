@@ -53,6 +53,9 @@ members = [
     "crates/services",
 
     # -- Tools
+
+    # -- tauri client
+    "crates-tauri/src-tauri",
 ]
 exclude = ["crates/libs/lib-bilibili"]
 
