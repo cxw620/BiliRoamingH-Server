@@ -78,6 +78,17 @@ impl Default for InterceptHandler {
     }
 }
 
+impl<R: InterceptT, H: HandlerT> InterceptHandler<R, H> {
+    #[inline]
+    pub fn new(interceptor: Option<R>, handler: H, desc: &'static str) -> Self {
+        Self {
+            interceptor,
+            handler,
+            desc,
+        }
+    }
+}
+
 impl<T, S, R: InterceptT, H: HandlerT> axum::handler::Handler<T, S> for InterceptHandler<R, H> {
     type Future = HandlerFuture;
 
