@@ -22,7 +22,7 @@ static CLIENTS: OnceLock<DashMap<&'static str, reqwest::Client>> = OnceLock::new
 /// Init Clients with given proxies url.
 ///
 /// Return error if CLIENTS is already inited.
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.rest.init_reqwest_clients", err)]
 pub fn init_reqwest_clients(proxies: Vec<&'static str>) -> Result<()> {
     let map = dashmap::DashMap::with_capacity(16);
 
@@ -41,7 +41,7 @@ pub fn init_reqwest_clients(proxies: Vec<&'static str>) -> Result<()> {
 }
 
 /// Generate reqwest::Client with given proxy
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.rest.gen_client", err)]
 fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
     let mut builder = Client::builder()
         .use_rustls_tls()
@@ -71,7 +71,7 @@ fn gen_client(proxy: Option<reqwest::Proxy>) -> Result<reqwest::Client> {
 }
 
 /// Get reqwest::Client from CLIENTS cache or new one with given proxy
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.rest.get_client", err)]
 fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
     let clients = CLIENTS.get_or_init(|| {
         tracing::warn!("CLIENTS should be initialized before get_client!!!");
@@ -84,13 +84,13 @@ fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
 
     let client = clients
         .get(proxy.unwrap_or_else(|| {
-            tracing::trace!("proxy is None, use default client");
+            tracing::debug!("proxy is None, use default client");
             "default"
         }))
         .map(|c| c.clone());
 
     if let Some(client) = client {
-        tracing::trace!("Got reqwest::Client from cache");
+        tracing::debug!("Got reqwest::Client from cache");
         Ok(client)
     } else {
         tracing::warn!("Unknown given proxy, Box::leak may cause memory leak");
@@ -102,7 +102,7 @@ fn get_client(proxy: Option<&str>) -> Result<reqwest::Client> {
         let client = gen_client(Some(rp))?;
         clients.insert(Box::leak(Box::new(proxy_str.to_string())), client.clone());
 
-        tracing::trace!("Got new reqwest::Client from given proxy [{:?}]", proxy);
+        tracing::debug!("Got new reqwest::Client from given proxy");
         Ok(client)
     }
 }
@@ -140,7 +140,7 @@ impl<'c> RestRequest<'c> {
     }
 
     /// Execute request with given method, url, headers and body.
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug", name = "RestRequest.execute", err)]
     pub async fn execute(self, method: HttpMethod) -> Result<RawResponseExt> {
         let client = get_client(self.proxy)?;
 
@@ -160,7 +160,7 @@ impl<'c> RestRequest<'c> {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct RestRequestBuilder<'r> {
     proxy: Option<&'r str>,
     url: Option<&'r str>,
@@ -203,6 +203,7 @@ impl<'c> RestRequestBuilder<'c> {
 
     /// Build RestRequest
     #[inline]
+    #[tracing::instrument(level = "debug", name = "RestRequestBuilder.build", err)]
     pub fn build(self) -> Result<RestRequest<'c>> {
         let url = self.url.expect("url is required for RestRequest");
         let url = url.parse().map_err(|e| CrateError::UrlParse {

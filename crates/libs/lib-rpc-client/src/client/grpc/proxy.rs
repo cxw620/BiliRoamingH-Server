@@ -66,7 +66,7 @@ pub enum ProxyScheme {
 }
 
 impl ProxyScheme {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug", name = "RpcClient.grpc.proxy.ProxyScheme.parse", err)]
     fn parse(url: &str) -> Result<Self> {
         let url = Url::parse(url).map_err(|e| ProxyError::from(e))?;
 

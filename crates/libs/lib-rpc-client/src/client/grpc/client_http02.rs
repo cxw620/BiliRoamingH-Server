@@ -14,7 +14,7 @@ static CLIENTS: OnceLock<DashMap<&'static str, GrpcClient>> = OnceLock::new();
 /// Init Clients with given proxies url.
 ///
 /// Return error if CLIENTS is already inited.
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.grpc.init_grpc_client", err)]
 pub fn init_grpc_client(proxies: Vec<&'static str>) -> Result<()> {
     let map = DashMap::with_capacity(16);
 
@@ -34,7 +34,7 @@ pub fn init_grpc_client(proxies: Vec<&'static str>) -> Result<()> {
     Ok(())
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.grpc.gen_client", err)]
 fn gen_client(proxies: Option<Proxy>) -> Result<GrpcClient> {
     let proxies = proxies.map_or(vec![], |p| vec![p]);
 
@@ -53,7 +53,7 @@ fn gen_client(proxies: Option<Proxy>) -> Result<GrpcClient> {
 }
 
 /// Get GrpcClient from CLIENTS cache or new one with given proxy
-#[tracing::instrument]
+#[tracing::instrument(level = "debug", name = "RpcClient.grpc.get_client", err)]
 pub fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
     let clients = CLIENTS.get_or_init(|| {
         tracing::warn!("CLIENTS should be initialized before get_client!!!");
@@ -66,13 +66,13 @@ pub fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
 
     let client = clients
         .get(proxy.unwrap_or_else(|| {
-            tracing::trace!("proxy is None, use default client");
+            tracing::debug!("proxy is None, use default client");
             "default"
         }))
         .map(|c| c.clone());
 
     if let Some(client) = client {
-        tracing::trace!("Got GrpcClient from cache");
+        tracing::debug!("Got GrpcClient from cache");
         Ok(client)
     } else {
         tracing::warn!("Unknown given proxy, Box::leak may cause memory leak");
@@ -84,7 +84,7 @@ pub fn get_client(proxy: Option<&str>) -> Result<GrpcClient> {
         let client = gen_client(Some(rp))?;
         clients.insert(Box::leak(Box::new(proxy_str.to_string())), client.clone());
 
-        tracing::trace!("Got new GrpcClient from given proxy [{:?}]", proxy);
+        tracing::debug!("Got new GrpcClient from given proxy");
         Ok(client)
     }
 }
@@ -125,7 +125,7 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
         Poll::Ready(Ok(()))
     }
 
-    #[tracing::instrument(skip(self), level = "debug", name = "GrpcClientExt")]
+    #[tracing::instrument(level = "debug", name = "RpcClient.grpc.GrpcClientExt call", skip(self))]
     fn call(&mut self, mut req: GrpcRequest) -> Self::Future {
         // Deal with original HeaderMap
         let header_map = {

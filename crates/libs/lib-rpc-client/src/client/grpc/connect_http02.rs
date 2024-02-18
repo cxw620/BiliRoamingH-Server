@@ -180,7 +180,7 @@ impl Connector {
             .call(proxy_dst)
             .await?;
 
-            tracing::trace!("tunneling HTTPS over http(s) proxy");
+            tracing::debug!("tunneling HTTPS over http(s) proxy");
 
             let tunneled = tunnel(proxy_conn, host, port, self.user_agent.clone(), auth).await?;
 
