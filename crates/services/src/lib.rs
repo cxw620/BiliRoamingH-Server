@@ -64,3 +64,25 @@ macro_rules! generate_router {
         }
     };
 }
+
+/// Convert headers between from http 0.2 and http 1.0
+#[macro_export]
+macro_rules! http02_compat {
+    ($name:ident, $original_map:expr, $compat:ident) => {
+        let mut $name = $compat::HeaderMap::with_capacity($original_map.len());
+        {
+            let mut key = None;
+            $original_map.into_iter().for_each(|(k, v)| {
+                if let Some(k) = k {
+                    key = Some(k)
+                }
+
+                let key = key.as_ref().unwrap().as_str().as_bytes();
+                let k = $compat::HeaderName::from_bytes(key).unwrap();
+                let v = $compat::HeaderValue::from_bytes(v.as_bytes()).unwrap();
+
+                $name.append(k, v);
+            })
+        }
+    };
+}
