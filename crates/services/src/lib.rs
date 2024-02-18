@@ -17,35 +17,35 @@ macro_rules! axum_response {
 
 #[macro_export]
 macro_rules! axum_route {
-    (GET => $handler:path) => {
+    (GET => $handler:expr) => {
         axum::routing::MethodRouter::new().get::<_, ()>($handler)
     };
-    (POST => $handler:path) => {
+    (POST => $handler:expr) => {
         axum::routing::MethodRouter::new().post::<_, ()>($handler)
     };
-    (PUT => $handler:path) => {
+    (PUT => $handler:expr) => {
         axum::routing::MethodRouter::new().put::<_, ()>($handler)
     };
-    (DELETE => $handler:path) => {
+    (DELETE => $handler:expr) => {
         axum::routing::MethodRouter::new().delete::<_, ()>($handler)
     };
-    (PATCH => $handler:path) => {
+    (PATCH => $handler:expr) => {
         axum::routing::MethodRouter::new().patch::<_, ()>($handler)
     };
-    (OPTIONS => $handler:path) => {
+    (OPTIONS => $handler:expr) => {
         axum::routing::MethodRouter::new().options::<_, ()>($handler)
     };
-    (HEAD => $handler:path) => {
+    (HEAD => $handler:expr) => {
         axum::routing::MethodRouter::new().head::<_, ()>($handler)
     };
-    (CONNECT => $handler:path) => {
+    (CONNECT => $handler:expr) => {
         axum::routing::MethodRouter::new().connect::<_, ()>($handler)
     };
 }
 
 #[macro_export]
 macro_rules! generate_router {
-    ($router_name:ident, $( ($route:expr, $method:ident, $handler:path) ),*) => {
+    ($router_name:ident, $( ($route:expr, $method:ident, $handler:expr) ),*) => {
         pub struct $router_name;
 
         impl $router_name {
@@ -55,7 +55,7 @@ macro_rules! generate_router {
                 $(
                     router = router.route(
                         $route,
-                        axum_route!($method => $handler),
+                        crate::axum_route!($method => $handler),
                     );
                 )*
 
