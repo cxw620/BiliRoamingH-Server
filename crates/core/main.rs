@@ -1,7 +1,8 @@
 extern crate services;
 
 use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 use lib_core::server::config::{init_config, CONFIG_SERVER};
 use services::handler::{playurl::PlayurlRouter, test::RouterTest, InterceptHandler};
@@ -48,11 +49,28 @@ fn init_tracing() {
         .install_batch(opentelemetry_sdk::runtime::Tokio)
         .unwrap();
 
-    let tracing_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+    let tracing_filter = EnvFilter::default()
+        .add_directive("lib_bilibili=debug".parse().unwrap())
+        .add_directive("lib_core=debug".parse().unwrap())
+        .add_directive("lib_rpc=debug".parse().unwrap())
+        .add_directive("lib_rpc_client=debug".parse().unwrap())
+        .add_directive("lib_utils=debug".parse().unwrap())
+        .add_directive("services=debug".parse().unwrap())
+        .add_directive("biliroamingh_rust_server=debug".parse().unwrap());
+
+    let tracing_layer = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_filter(tracing_filter);
+
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()
+        .unwrap()
+        .add_directive("hyper=error".parse().unwrap());
 
     tracing_subscriber::registry()
         .with(tracing_layer)
-        .with(fmt::layer())
+        .with(fmt::layer().with_filter(filter))
         .init();
 }
 
