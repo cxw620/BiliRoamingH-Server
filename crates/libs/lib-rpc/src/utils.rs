@@ -14,6 +14,7 @@ pub enum UpstreamType {
     ApiBilibiliCom,
     AppBilibiliCom,
     GrpcBiliapiNet,
+    Custom,
 }
 
 impl UpstreamType {
@@ -22,6 +23,7 @@ impl UpstreamType {
             Self::ApiBilibiliCom => "api.bilibili.com",
             Self::AppBilibiliCom => "app.bilibili.com",
             Self::GrpcBiliapiNet => "grpc.biliapi.net",
+            Self::Custom => panic!("Custom upstream type has no default value."),
         }
     }
 
@@ -54,7 +56,15 @@ impl<'u> Upstream<'u> {
     pub fn new(u_type: UpstreamType, u_custom: Option<&'u str>) -> Self {
         Self {
             u_type,
-            u_custom: u_custom.map(std::borrow::Cow::Borrowed),
+            u_custom: u_custom.map(Cow::Borrowed),
+        }
+    }
+
+    #[inline]
+    pub const fn new_custom(u_custom: &'u str) -> Self {
+        Self {
+            u_type: UpstreamType::Custom,
+            u_custom: Some(Cow::Borrowed(u_custom)),
         }
     }
 
@@ -93,6 +103,34 @@ impl From<UpstreamType> for Upstream<'_> {
             UpstreamType::ApiBilibiliCom => Self::API_DEFAULT,
             UpstreamType::AppBilibiliCom => Self::APP_DEFAULT,
             UpstreamType::GrpcBiliapiNet => Self::GRPC_DEFAULT,
+            UpstreamType::Custom => panic!("Custom upstream type has no default value."),
+        }
+    }
+}
+
+impl From<String> for Upstream<'_> {
+    fn from(u_custom: String) -> Self {
+        Self {
+            u_type: UpstreamType::Custom,
+            u_custom: Some(Cow::Owned(u_custom)),
+        }
+    }
+}
+
+impl<'r> From<&'r str> for Upstream<'r> {
+    fn from(u_custom: &'r str) -> Self {
+        Self {
+            u_type: UpstreamType::Custom,
+            u_custom: Some(Cow::Borrowed(u_custom)),
+        }
+    }
+}
+
+impl<'r> From<Cow<'r, str>> for Upstream<'r> {
+    fn from(u_custom: Cow<'r, str>) -> Self {
+        Self {
+            u_type: UpstreamType::Custom,
+            u_custom: Some(u_custom),
         }
     }
 }
