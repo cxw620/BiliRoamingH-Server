@@ -2,7 +2,7 @@ use anyhow::Result;
 use http_02::{HeaderMap as HttpHeaderMap, Method as HttpMethod};
 use url::Url;
 
-use std::{borrow::Cow, future::Future};
+use std::{borrow::Cow, future::Future, fmt::Debug as StdDebug};
 
 use super::client::{
     rest::{ReqBody, RestRequest, RestRequestBuilder},
@@ -19,11 +19,12 @@ pub trait RpcT<'r> {
     /// Pre-defined request path. Default to `""`.
     const PATH: &'static str = "";
 
+    #[tracing::instrument(level = "debug", name = "RpcT.execute_rpc")]
     fn execute_rpc(
         proxy: Option<&'r str>,
         query: Option<Cow<'r, str>>,
-        headers: Option<impl Into<HttpHeaderMap>>,
-        body: Option<impl Into<ReqBody>>,
+        headers: Option<impl Into<HttpHeaderMap> + StdDebug>,
+        body: Option<impl Into<ReqBody> + StdDebug>,
     ) -> impl Future<Output = Result<RawResponseExt>> + Send {
         GeneralRequest::new(Self::METHOD, Self::UPSTREAM, Self::PATH)
             .with_proxy(proxy)
@@ -88,6 +89,7 @@ impl<'r> GeneralRequest<'r> {
     }
 
     #[inline]
+    #[tracing::instrument(level = "debug", name = "GeneralRequest.execute", skip_all, err)]
     pub async fn execute(self) -> Result<RawResponseExt> {
         let full_url = self.upstream.url().map(|mut u: Url| {
             u.set_path(self.path);
