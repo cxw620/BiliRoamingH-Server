@@ -106,6 +106,9 @@ pub enum ServerError {
     /// 服务器内部错误(兜底)
     #[error("服务器内部错误")]
     General = 5_500_000,
+    /// 服务器内部错误: 通用 RPC 错误
+    #[error("服务器内部错误: RPC 错误")]
+    GeneralRpc = 5_500_001,
     /// 程序序列化相关错误, 含 gRPC 序列化错误和 JSON 解析错误
     #[error("服务器内部错误: 序列化错误")]
     Serialization = 5_500_101,
@@ -284,10 +287,19 @@ impl IntoResponse for ServerError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerErrorExt {
+    /// Basic server error with default message
     #[error(transparent)]
     Server(#[from] ServerError),
+    /// Server error with custom message
+    #[error("{}", self.e_message())]
+    ServerExt {
+        source: ServerError,
+        message: Option<String>,
+    },
+    /// Anyhow error unknown
     #[error(transparent)]
-    Any { source: anyhow::Error },
+    Any(#[from] anyhow::Error),
+    /// Custom error
     #[error("{message}")]
     Custom { code: i64, message: String },
 }
@@ -296,14 +308,15 @@ impl<'e> TError<'e> for ServerErrorExt {
     fn e_code(&self) -> i64 {
         match self {
             Self::Server(e) => e.e_code(),
-            Self::Any { source } => {
-                if let Some(e) = source.downcast_ref::<Self>() {
-                    e.e_code()
-                } else if let Some(e) = source.downcast_ref::<ServerError>() {
-                    e.e_code()
-                } else {
-                    5_500_000
+            Self::ServerExt { source, .. } => source.e_code(),
+            Self::Any(e) => {
+                if let Some(e) = e.downcast_ref::<Self>() {
+                    return e.e_code();
                 }
+                if let Some(e) = e.downcast_ref::<ServerError>() {
+                    return e.e_code();
+                }
+                ServerError::General.e_code()
             }
             Self::Custom { code, .. } => *code,
         }
@@ -311,15 +324,23 @@ impl<'e> TError<'e> for ServerErrorExt {
     fn e_message(&'e self) -> Cow<'e, str> {
         match self {
             Self::Server(e) => e.e_message(),
-            Self::Any { source } => {
-                if let Some(e) = source.downcast_ref::<Self>() {
-                    e.e_message()
-                } else if let Some(e) = source.downcast_ref::<ServerError>() {
-                    e.e_message()
+            Self::ServerExt { source, message } => {
+                if message.is_none() {
+                    source.e_message()
                 } else {
-                    tracing::error!("Unknown anyhow error: {}", &source);
-                    "服务器内部错误".into()
+                    Cow::Borrowed(message.as_ref().unwrap())
                 }
+            }
+            Self::Any(e) => {
+                if let Some(e) = e.downcast_ref::<Self>() {
+                    return e.e_message();
+                }
+                if let Some(e) = e.downcast_ref::<ServerError>() {
+                    return e.e_message();
+                }
+
+                tracing::error!("Unknown anyhow error: {}", &e);
+                ServerError::General.e_message()
             }
             Self::Custom { message, .. } => message.into(),
         }
@@ -329,23 +350,6 @@ impl<'e> TError<'e> for ServerErrorExt {
 impl IntoResponse for ServerErrorExt {
     fn into_response(self) -> AxumResponse {
         self.e_response()
-    }
-}
-
-impl From<anyhow::Error> for ServerErrorExt {
-    #[tracing::instrument(level = "error", name = "ServerErrorExt from anyhow::Error")]
-    fn from(e: anyhow::Error) -> Self {
-        if let Some(server_error) = e.downcast_ref() {
-            return Self::Server(*server_error);
-        }
-        if let Some(bili_error) = e.downcast_ref::<BiliError>() {
-            return (bili_error.to_owned()).into();
-        }
-        if let Some(header_error) = e.downcast_ref::<HeaderError>() {
-            tracing::error!("Detect HeaderError: {:?}", header_error);
-            return Self::Server(ServerError::General);
-        }
-        Self::Any { source: e }
     }
 }
 
@@ -544,7 +548,7 @@ impl TryFrom<(i64, &str)> for BiliError {
 }
 
 impl From<BiliError> for ServerErrorExt {
-    #[tracing::instrument(level = "error", name = "ServerErrorExt from BiliError")]
+    #[tracing::instrument(level = "error", name = "ServerErrorExt.from BiliError")]
     fn from(value: BiliError) -> Self {
         let server_error = match value {
             BiliError::Ok => {
@@ -587,7 +591,7 @@ use crate::{parse_grpc_any, str_concat};
 use lib_bilibili::bapis::rpc::Status as BiliGrpcStatus;
 
 impl From<tonic::Status> for ServerErrorExt {
-    #[tracing::instrument(level = "error", name = "ServerErrorExt from tonic::Status")]
+    #[tracing::instrument(level = "error", name = "ServerErrorExt.from tonic::Status")]
     fn from(e: tonic::Status) -> Self {
         let grpc_code = e.code();
         match grpc_code {
@@ -602,7 +606,9 @@ impl From<tonic::Status> for ServerErrorExt {
                         let e_details = bili_rpc_status.details;
                         tracing::error!(
                             "gRPC Uptream Error: code={}, message={}, details={:?}",
-                            e_code, e_message, e_details
+                            e_code,
+                            e_message,
+                            e_details
                         );
                         return if let Ok(e) = BiliError::try_from((e_code, e_message.as_str())) {
                             Self::from(e)

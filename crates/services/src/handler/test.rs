@@ -24,12 +24,8 @@ impl<T, S> axum::handler::Handler<T, S> for TestHandler {
             let data = match req.uri().path() {
                 "/ok_empty" => Ok("ok_empty"),
                 "/fatal" => Err(anyhow!(ServerError::ServerFatal)),
-                "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any {
-                    source: anyhow!(ServerError::ServicesDeprecated)
-                })),
-                "/any" => Err(anyhow!(ServerErrorExt::Any {
-                    source: anyhow!("anyhow error")
-                })),
+                "/services_deprecated" => Err(anyhow!(ServerErrorExt::Any(anyhow!(ServerError::ServicesDeprecated)))),
+                "/any" => Err(anyhow!(ServerErrorExt::Any(anyhow!("anyhow error")))),
                 "/custom" => Err(anyhow!(ServerErrorExt::Custom {
                     code: 5_500_000,
                     message: "custom error".to_string()
