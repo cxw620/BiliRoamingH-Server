@@ -10,6 +10,9 @@ pub enum Kind {
 
     #[error(transparent)]
     InvalidUri(#[from] http_02::uri::InvalidUri),
+
+    #[error(transparent)]
+    Any(#[from] anyhow::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
