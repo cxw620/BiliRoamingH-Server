@@ -20,9 +20,9 @@ pub enum UpstreamType {
 impl UpstreamType {
     const fn str(&self) -> &'static str {
         match self {
-            Self::ApiBilibiliCom => "api.bilibili.com",
-            Self::AppBilibiliCom => "app.bilibili.com",
-            Self::GrpcBiliapiNet => "grpc.biliapi.net",
+            Self::ApiBilibiliCom => "https://api.bilibili.com",
+            Self::AppBilibiliCom => "https://app.bilibili.com",
+            Self::GrpcBiliapiNet => "https://grpc.biliapi.net",
             Self::Custom => panic!("Custom upstream type has no default value."),
         }
     }
@@ -61,6 +61,9 @@ impl<'u> Upstream<'u> {
     }
 
     #[inline]
+    /// Create a new custom upstream.
+    /// 
+    /// Attention: The custom upstream must start with `https://` or `http://`.
     pub const fn new_custom(u_custom: &'u str) -> Self {
         Self {
             u_type: UpstreamType::Custom,
@@ -68,9 +71,18 @@ impl<'u> Upstream<'u> {
         }
     }
 
-    pub fn with_custom(mut self, u_custom: &'u str) -> Self {
-        self.u_custom = Some(Cow::Borrowed(u_custom));
-        self
+    #[inline]
+    #[tracing::instrument(level = "debug", name = "Upstream url", err)]
+    pub fn with_custom(mut self, u_custom: &'u str) -> Result<Self> {
+        if u_custom.starts_with("https://") || u_custom.starts_with("http://") {
+            self.u_custom = Some(Cow::Borrowed(u_custom));
+        } else {
+            return Err(anyhow!(RpcError::PreRequest(Kind::Any(anyhow!(
+                "Invalid custom upstream scheme."
+            )))));
+        }
+
+        Ok(self)
     }
 
     #[inline]
@@ -82,11 +94,13 @@ impl<'u> Upstream<'u> {
     }
 
     #[inline]
+    #[tracing::instrument(level = "debug", name = "Upstream.url", err)]
     pub fn url(&self) -> Result<Url> {
         Url::parse(self.str()).map_err(|e| anyhow!(RpcError::PreRequest(Kind::from(e))))
     }
 
     #[inline]
+    #[tracing::instrument(level = "debug", name = "Upstream.uri", err)]
     pub fn uri(&self) -> Result<Uri> {
         match &self.u_custom {
             Some(c) => {
