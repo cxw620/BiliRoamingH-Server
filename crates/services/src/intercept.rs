@@ -14,9 +14,7 @@ pub trait InterceptT: 'static + std::fmt::Debug + Clone + Send {
         &self,
         request: &mut AxumRequest,
     ) -> impl Future<Output = Result<()>> + Send {
-        async {
-            Ok(())
-        }
+        async { Ok(()) }
     }
 
     /// Intercept response headers or bodys, modify original response,
@@ -26,12 +24,24 @@ pub trait InterceptT: 'static + std::fmt::Debug + Clone + Send {
         &self,
         response: &mut AxumResponse,
     ) -> impl Future<Output = Result<Option<AxumResponse>>> + Send {
-        async {
-            Ok(None)
-        }
+        async { Ok(None) }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultInterceptor;
-impl InterceptT for DefaultInterceptor {}
+impl InterceptT for DefaultInterceptor {
+    fn intercept_request(
+        &self,
+        request: &mut AxumRequest,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async {
+            let headers = request.headers_mut();
+
+            // Remove the host header to avoid the request being rejected by the server
+            headers.remove(http::header::HOST);
+
+            Ok(())
+        }
+    }
+}
