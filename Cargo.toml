@@ -63,7 +63,7 @@ exclude = ["crates/libs/lib-bilibili"]
 version = "0.1.0"
 authors = ["Hantong Chen <hantong@utop.win>"]
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.76"
 
 [workspace.dependencies]
 # Dev deps
