@@ -13,6 +13,9 @@ use crate::{
     CrateError,
 };
 
+// Re-export reqwest::Body
+pub use reqwest::Body as ReqBody;
+
 /// Clients with or without proxy
 static CLIENTS: OnceLock<DashMap<&'static str, reqwest::Client>> = OnceLock::new();
 
@@ -213,6 +216,17 @@ impl<'c> RestRequestBuilder<'c> {
             headers: self.headers,
             body: self.body,
         })
+    }
+
+    /// Build RestRequest with given url
+    #[inline]
+    pub fn build_with(self, url: Url) -> RestRequest<'c> {
+        RestRequest {
+            proxy: self.proxy,
+            url,
+            headers: self.headers,
+            body: self.body,
+        }
     }
 }
 
