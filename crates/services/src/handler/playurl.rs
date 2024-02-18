@@ -1,25 +1,14 @@
 use anyhow::Result;
-use axum::routing::MethodRouter;
 use serde_json::json;
 
-use crate::{axum_response, HandlerFuture};
+use crate::{axum_response, axum_route, generate_router, HandlerFuture};
 use lib_utils::url::QueryMap;
 
-pub struct PlayurlRouter;
-
-impl PlayurlRouter {
-    pub fn new() -> axum::Router {
-        axum::Router::new()
-            .route(
-                "/pgc/player/api/playurl",
-                MethodRouter::new().get::<PlayurlHandler, ()>(PlayurlHandler::PgcPlayerApi),
-            )
-            .route(
-                "/pgc/player/web/playurl",
-                MethodRouter::new().get::<PlayurlHandler, ()>(PlayurlHandler::PgcPlayerWeb),
-            )
-    }
-}
+generate_router!(
+    PlayurlRouter,
+    ("/pgc/player/api/playurl", GET, PlayurlHandler::PgcPlayerApi),
+    ("/pgc/player/web/playurl", GET, PlayurlHandler::PgcPlayerWeb)
+);
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -50,10 +39,7 @@ where
 }
 
 impl PlayurlHandler {
-    pub async fn get_playurl(
-        &self,
-        req: axum::extract::Request,
-    ) -> Result<serde_json::Value> {
+    pub async fn get_playurl(&self, req: axum::extract::Request) -> Result<serde_json::Value> {
         let query_map = QueryMap::try_from_req(&req)?;
         // TODO implement get playurl
         Ok(json!({
@@ -63,28 +49,3 @@ impl PlayurlHandler {
         }))
     }
 }
-
-use lib_bilibili::bapis::app::playerunite::v1::{
-    player_server::Player, PlayViewUniteReply, PlayViewUniteReq,
-};
-
-#[derive(Debug, Default)]
-pub struct GrpcServerPlayerUniteV1;
-
-#[tonic::async_trait]
-impl Player for GrpcServerPlayerUniteV1 {
-    async fn play_view_unite(
-        &self,
-        request: tonic::Request<PlayViewUniteReq>,
-    ) -> std::result::Result<tonic::Response<PlayViewUniteReply>, tonic::Status> {
-        todo!()
-    }
-}
-
-async fn grpc_server_player_unite_v1(
-    req: tonic::Request<PlayViewUniteReq>,
-) -> anyhow::Result<tonic::Response<PlayViewUniteReply>> {
-    let reply = PlayViewUniteReply::default();
-    Ok(tonic::Response::new(reply))
-}
-
