@@ -74,7 +74,7 @@ impl<T: StdDebug + Serialize> GeneralResponse<T> {
 
     /// Create a new [GeneralResponse] with error tracing infos.
     #[inline]
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(level = "error", name = "GeneralResponse.new_error", skip_all)]
     pub fn new_error(code: i64, message: impl ToString) -> Self {
         let mut response = Self {
             code,
@@ -100,7 +100,7 @@ impl<T: StdDebug + Serialize> GeneralResponse<T> {
     ///
     /// For historical reason, sometimes non standard response with only `data` is required.
     #[inline]
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", name = "GeneralResponse.into_response", skip(self))]
     pub fn into_response(self, data_only: bool) -> AxumResponse {
         let mut buf = BytesMut::with_capacity(128).writer();
         if data_only && self.code == 0 {
