@@ -184,6 +184,7 @@ pub mod test {
 pub type RawQueryMap<'m> = std::collections::HashMap<Cow<'m, str>, Cow<'m, str>>;
 
 /// High performance struct for parsing query
+#[derive(Debug)]
 pub struct QueryMap<'m> {
     inner: RawQueryMap<'m>,
 }
