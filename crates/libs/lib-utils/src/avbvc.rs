@@ -60,7 +60,6 @@ pub enum AvBvCError {
 #[macro_export]
 macro_rules! av2bv {
     ($avid:expr) => {{
-        use log::error;
         lib_utils::avbvc::av2bv($avid)
             .inspect_err(|e| {
                 tracing::error!("Failed to convert AID '{}' to BVID: {}", $avid, e);
@@ -112,7 +111,6 @@ pub fn av2bv(avid: u64) -> Result<String, AvBvCError> {
 #[macro_export]
 macro_rules! bv2av {
     ($bvid:expr) => {{
-        use log::error;
         lib_utils::avbvc::bv2av($bvid)
             .inspect_err(|e| {
                 tracing::error!("Failed to convert BVID '{}' to AID: {}", $bvid, e);
