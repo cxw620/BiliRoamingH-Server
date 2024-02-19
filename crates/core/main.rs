@@ -53,6 +53,7 @@ fn init_tracing() {
         .unwrap();
 
     let tracing_filter = EnvFilter::default()
+        .add_directive("otel::tracing=trace".parse().unwrap())
         .add_directive("lib_bilibili=debug".parse().unwrap())
         .add_directive("lib_core=debug".parse().unwrap())
         .add_directive("lib_rpc=debug".parse().unwrap())
