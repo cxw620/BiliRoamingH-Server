@@ -118,14 +118,14 @@ type GrpcRequest = HttpRequest<tonic::body::BoxBody>;
 
 impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
     type Response = HttpResponse<hyper_014::Body>;
-    type Error = CrateError;
+    type Error = tonic::Status;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    #[tracing::instrument(level = "debug", name = "RpcClient.grpc.GrpcClientExt call", skip(self))]
+    #[tracing::instrument(level = "debug", name = "RpcClient.grpc.GrpcClientExt call", skip_all)]
     fn call(&mut self, mut req: GrpcRequest) -> Self::Future {
         // Deal with original HeaderMap
         let header_map = {
@@ -147,25 +147,23 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
 
         let client = get_client(self.proxy);
 
-        if self.used {
-            tracing::error!("GrpcClientExt should not be reused");
-            return Box::pin(async move { Err(CrateError::Unknown) });
-        }
+        // Mark client used
+        let used = self.used;
+        self.used = true;
 
-        Box::pin(async move {
+        let execute_rpc = async move {
+            if used {
+                return Err(anyhow!("GrpcClientExt should not be reused"));
+            }
+
             let client = client?;
 
-            let mut response = client.request(req).await.map_err(|e| {
-                tracing::error!("GrpcClient met with error: {:?}", e);
-                CrateError::from(e)
-            })?;
+            let mut response = client.request(req).await?;
 
             let headers = response.headers_mut();
 
-            let status = tonic::Status::from_header_map(headers).ok_or_else(|| {
-                tracing::error!("GrpcClient met with error: not Grpc Response");
-                CrateError::NotGrpcResponse
-            })?;
+            let status =
+                tonic::Status::from_header_map(headers).ok_or(CrateError::NotGrpcResponse)?;
 
             // Remove gRPC status headers, or tonic will complain about "protocol error:
             // received message with compressed-flag but no grpc-encoding was specified"
@@ -174,11 +172,20 @@ impl tower::Service<GrpcRequest> for GrpcClientExt<'_> {
             headers.remove("grpc-status-details-bin");
 
             if status.code() != tonic::Code::Ok {
-                tracing::error!("GrpcClient met with error: {:?}", status);
-                return Err(CrateError::from(status));
+                return Err(anyhow!(status));
             }
 
             Ok(response)
+        };
+
+        Box::pin(async move {
+            execute_rpc.await.map_err(|e| match e.downcast() {
+                Ok(e) => e,
+                Err(e) => match e.downcast::<anyhow::Error>() {
+                    Ok(e) => tonic::Status::internal(e.to_string()),
+                    Err(e) => tonic::Status::internal(e.to_string()),
+                },
+            })
         })
     }
 }
