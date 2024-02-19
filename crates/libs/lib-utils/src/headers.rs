@@ -3,7 +3,7 @@ use http_02::{HeaderMap as HttpHeaderMap, HeaderValue as HttpHeaderValue};
 use tonic::metadata::MetadataMap;
 
 use crate::{
-    b64_decode, b64_encode, encode_grpc_header_bin,
+    b64_decode, encode_grpc_header_bin,
     error::HeaderError,
     misc::{gen_aurora_eid, gen_trace_id},
     random_string, str_concat,
@@ -123,7 +123,7 @@ use lib_bilibili::bapis::metadata::{
 
 pub trait BiliHeaderT {
     fn set(&mut self, key: HeaderKey, value: impl TryInto<HttpHeaderValue>) -> &mut Self;
-    fn set_binary(&mut self, key: HeaderKey, value: impl AsRef<[u8]>) -> &mut Self;
+    fn set_binary(&mut self, key: HeaderKey, value: impl AsRef<[u8]> + 'static) -> &mut Self;
     /// Set `authorization`
     fn set_access_key(&mut self, access_key: &str) -> &mut Self {
         self.set(
@@ -354,17 +354,16 @@ impl ManagedHeaderMap {
     ///
     /// This function panics if the argument `key` is not a valid binary type gRPC Metadata
     /// key when `self.is_metadata`.
-    pub fn insert_bin(&mut self, key: HeaderKey, value: impl AsRef<[u8]>) -> &mut Self {
+    pub fn insert_bin(&mut self, key: HeaderKey, value: impl AsRef<[u8]> + 'static) -> &mut Self {
         debug_assert!(
             self.is_metadata && Self::is_valid_bin_key(key.str()),
             "Not a gRPC Metadata or key [{}] is not valid binary type gRPC Metadata key",
             key.str()
         );
 
-        let data_base64 = b64_encode!(value, base64::engine::general_purpose::STANDARD_NO_PAD);
-
         // SAFE: Base64 encoded data value must be valid http header value
-        self.inner.insert(key.str(), data_base64.parse().unwrap());
+        let value = unsafe { HttpHeaderValue::from_maybe_shared_unchecked(value) };
+        self.inner.insert(key.str(), value);
 
         self
     }
@@ -483,7 +482,7 @@ impl BiliHeaderT for ManagedHeaderMap {
     }
 
     #[inline]
-    fn set_binary(&mut self, key: HeaderKey, value: impl AsRef<[u8]>) -> &mut Self {
+    fn set_binary(&mut self, key: HeaderKey, value: impl AsRef<[u8]> + 'static) -> &mut Self {
         self.insert_bin(key, value)
     }
 }
