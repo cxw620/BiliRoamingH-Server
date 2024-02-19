@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Colerar. MIT license.
 // Origin: https://github.com/Colerar/abv, Commit 6c29436. Modified by cxw620.
 
-use std::{borrow::Cow, ptr};
+use std::{borrow::Cow, fmt::Debug as FmtDebug, ptr};
 
 use thiserror::Error;
 
@@ -61,13 +61,16 @@ pub enum AvBvCError {
 macro_rules! av2bv {
     ($avid:expr) => {{
         use log::error;
-        lib_utils::avbvc::av2bv($avid).map_err(|e| {
-            tracing::error!(target: "AVBVC", "Failed to convert AID '{}' to BVID: {}", $avid, e);
-        }).unwrap_or(String::new())
+        lib_utils::avbvc::av2bv($avid)
+            .inspect_err(|e| {
+                tracing::error!("Failed to convert AID '{}' to BVID: {}", $avid, e);
+            })
+            .unwrap_or(String::new())
     }};
 }
 
 /// av2bv func: **DO NOT USE THIS DIRECTLY**, use `av2bv!` macro instead
+#[tracing::instrument(level = "debug", name = "utils.av2bv", err)]
 pub fn av2bv(avid: u64) -> Result<String, AvBvCError> {
     if avid < MIN_AID {
         return Err(AvBvCError::AvTooSmall(avid));
@@ -110,16 +113,19 @@ pub fn av2bv(avid: u64) -> Result<String, AvBvCError> {
 macro_rules! bv2av {
     ($bvid:expr) => {{
         use log::error;
-        lib_utils::avbvc::bv2av($bvid).map_err(|e| {
-            tracing::error!(target: "AVBVC", "Failed to convert BVID '{}' to AID: {}", $bvid, e);
-        }).unwrap_or(0)
+        lib_utils::avbvc::bv2av($bvid)
+            .inspect_err(|e| {
+                tracing::error!("Failed to convert BVID '{}' to AID: {}", $bvid, e);
+            })
+            .unwrap_or(0)
     }};
 }
 
 /// bv2av func: **DO NOT USE THIS DIRECTLY**, use `bv2av!` macro instead
+#[tracing::instrument(level = "debug", name = "utils.bv2av", err)]
 pub fn bv2av<'a, S>(bvid: S) -> Result<u64, AvBvCError>
 where
-    S: Into<Cow<'a, str>>,
+    S: Into<Cow<'a, str>> + FmtDebug,
 {
     let bvid: Cow<_> = bvid.into();
     if bvid.is_empty() {
