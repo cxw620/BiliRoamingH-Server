@@ -94,7 +94,7 @@ impl Connector {
             http
         };
 
-        let tls_config = super::tls::rustls_config(cfg!(test));
+        let tls_config = super::tls::rustls_config(cfg!(test) || cfg!(debug_assertions));
 
         // Clear ALPN for HTTP(s) Proxy
         // See: https://github.com/seanmonstar/reqwest/pull/466

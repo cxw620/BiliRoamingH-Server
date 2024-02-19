@@ -19,6 +19,10 @@ async fn main() {
 
     init_config();
 
+    if cfg!(test) || cfg!(debug_assertions) {
+        tracing::warn!("Running in test/debug mode, will IGNORE invalid certificates!!! For safety, please run in release mode.")
+    }
+
     let app = axum::Router::new()
         .merge(PlayurlRouter::new())
         .merge(TestInterceptRouter::new())
