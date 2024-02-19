@@ -42,7 +42,7 @@ impl PassportCommParams {
     }
 
     /// Set `buvid`
-    /// 
+    ///
     /// Attention: `buvid` are server side stored one
     pub fn set_buvid(mut self, buvid: impl ToString) -> Self {
         self.inner.insert("buvid", buvid.to_string());
@@ -81,12 +81,12 @@ impl PassportCommParams {
         self
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug", name = "PassportCommParams.build", skip(self), err)]
     pub fn build(self) -> Result<HashMap<&'static str, String>> {
         if self.inner.len() < 7 && self.inner.contains_key("from_access_key") {
             tracing::error!(
-                "Build PassportCommParams error, not all required fields are set: {:?}",
-                self.inner
+                inner = ?self.inner,
+                "Build PassportCommParams error, not all required fields are set"
             );
             bail!("Check if all required fields are set");
         }
