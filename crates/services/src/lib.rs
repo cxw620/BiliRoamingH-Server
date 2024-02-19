@@ -46,20 +46,29 @@ macro_rules! axum_route {
 #[macro_export]
 macro_rules! generate_router {
     ($router_name:ident, $( ($route:expr, $method:ident, $handler:expr) ),*) => {
+        #[derive(Debug, Default, Clone)]
         pub struct $router_name;
 
         impl $router_name {
             pub fn new() -> axum::Router {
-                let mut router = axum::Router::new();
+                axum::Router::new()
+                    $(
+                        .route($route, crate::axum_route!($method => $handler),)
+                    )*
+            }
+        }
+    };
+    ($router_name:ident, $( ($route:expr, $method:ident, $handler:expr) ),* fallback=$fallback_handler:expr) => {
+        #[derive(Debug, Default, Clone)]
+        pub struct $router_name;
 
-                $(
-                    router = router.route(
-                        $route,
-                        crate::axum_route!($method => $handler),
-                    );
-                )*
-
-                router
+        impl $router_name {
+            pub fn new() -> axum::Router {
+                axum::Router::new()
+                    $(
+                        .route($route, crate::axum_route!($method => $handler),)
+                    )*
+                    .fallback::<_, ()>($fallback_handler)
             }
         }
     };
