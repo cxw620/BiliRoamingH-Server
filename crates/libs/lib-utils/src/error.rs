@@ -496,6 +496,7 @@ pub enum BiliError {
     /// 播放平台限制
     ///
     /// - c = `-10403`, m = `抱歉您所使用的平台不可观看！`
+    /// - c = `6002004`, m = `抱歉您所使用的平台不可观看！`
     #[error("C: 抱歉您所使用的平台不可观看！(E=-10403)")]
     ResPlatformLimit,
     /// 未知兜底
@@ -532,6 +533,7 @@ impl TryFrom<(i64, &str)> for BiliError {
             -10403 if value.1 == "大会员专享限制" => Self::ResVipOnly,
             10015002 => Self::ResBStarVipOnly,
             6002003 => Self::ResAreaLimit,
+            6002004 => Self::ResPlatformLimit,
             -10403 if value.1 == "抱歉您所在地区不可观看！" => Self::ResAreaLimit,
             6010001 => Self::ResSeasonAreaLimit,
             -10403 if value.1 == "抱歉您所使用的平台不可观看！" => {
