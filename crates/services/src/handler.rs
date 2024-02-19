@@ -2,14 +2,15 @@ pub mod playurl;
 pub mod test;
 pub mod test_intercept;
 
-use anyhow::Result;
-use axum::extract::Request as AxumRequest;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::response::Response as AxumResponse;
+use anyhow::{bail, Result};
+use axum::{
+    extract::Request as AxumRequest,
+    http::StatusCode,
+    response::{IntoResponse, Response as AxumResponse},
+};
 use lib_utils::error::ServerErrorExt;
 
-use std::future::Future;
+use std::{fmt::Debug as FmtDebug, future::Future};
 
 use crate::{
     intercept::{DefaultInterceptor, InterceptT},
@@ -18,7 +19,7 @@ use crate::{
 use lib_utils::error::ServerError;
 
 /// A trait for handling requests.
-pub trait HandlerT: 'static + Sized + std::fmt::Debug + Clone + Send {
+pub trait HandlerT: 'static + Sized + FmtDebug + Clone + Send {
     type Response: IntoResponse;
 
     /// Call the handler.
@@ -27,6 +28,7 @@ pub trait HandlerT: 'static + Sized + std::fmt::Debug + Clone + Send {
     fn call(self, req: AxumRequest) -> impl Future<Output = Result<Self::Response>> + Send;
 
     /// Call the handler and return the response
+    #[tracing::instrument(level = "debug", name = "HandlerT.call_for_response", skip(self))]
     fn call_for_response(self, req: AxumRequest) -> impl Future<Output = AxumResponse> + Send {
         async {
             self.call(req)
@@ -43,7 +45,7 @@ pub struct DefaultHandler;
 impl HandlerT for DefaultHandler {
     type Response = AxumResponse;
 
-    #[tracing::instrument(skip(self), name = "DefaultHandler")]
+    #[tracing::instrument(level = "debug", name = "DefaultHandler.call", skip(self), err)]
     async fn call(self, req: AxumRequest) -> Result<Self::Response> {
         let req_uri = req.uri();
         let response = match req_uri.path() {
@@ -54,7 +56,7 @@ impl HandlerT for DefaultHandler {
                     req_uri.path(),
                     req_uri.query()
                 );
-                return Err(ServerError::ServicesUnsupported.into());
+                bail!(ServerError::ServicesUnsupported)
             }
         };
         Ok(response)
@@ -93,8 +95,8 @@ impl<R: InterceptT, H: HandlerT> InterceptHandler<R, H> {
 impl<T, S, R: InterceptT, H: HandlerT> axum::handler::Handler<T, S> for InterceptHandler<R, H> {
     type Future = HandlerFuture;
 
-    #[tracing::instrument(skip(self, _state), name = "InterceptHandler", fields(intercept.desc = self.desc))]
-    fn call(self, mut req: axum::extract::Request, _state: S) -> Self::Future {
+    #[tracing::instrument(level = "debug", name = "InterceptHandler.call", fields(intercept.desc = self.desc), skip(self, _state))]
+    fn call(self, mut req: AxumRequest, _state: S) -> Self::Future {
         Box::pin(async move {
             if let Some(interceptor) = &self.interceptor {
                 if let Err(e) = interceptor.intercept_request(&mut req).await {

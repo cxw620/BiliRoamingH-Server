@@ -7,7 +7,7 @@ use axum::extract::Request as AxumRequest;
 use axum::response::Response as AxumResponse;
 
 pub trait InterceptT: 'static + std::fmt::Debug + Clone + Send {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", name = "InterceptT.intercept_request", skip(self))]
     /// Intercept request headers or body, return `Ok(())` to continue
     /// or error stop the request.
     fn intercept_request(
@@ -19,7 +19,7 @@ pub trait InterceptT: 'static + std::fmt::Debug + Clone + Send {
 
     /// Intercept response headers or bodys, modify original response,
     /// return new [AxumResponse] or error.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(level = "debug", name = "InterceptT.intercept_response", skip(self))]
     fn intercept_response(
         &self,
         response: &mut AxumResponse,
@@ -31,17 +31,18 @@ pub trait InterceptT: 'static + std::fmt::Debug + Clone + Send {
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultInterceptor;
 impl InterceptT for DefaultInterceptor {
-    fn intercept_request(
-        &self,
-        request: &mut AxumRequest,
-    ) -> impl Future<Output = Result<()>> + Send {
-        async {
-            let headers = request.headers_mut();
+    #[tracing::instrument(
+        level = "debug",
+        name = "DefaultInterceptor.intercept_request",
+        skip(self),
+        err
+    )]
+    async fn intercept_request(&self, request: &mut AxumRequest) -> Result<()> {
+        let headers = request.headers_mut();
 
-            // Remove the host header to avoid the request being rejected by the server
-            headers.remove(http::header::HOST);
+        // Remove the host header to avoid the request being rejected by the server
+        headers.remove(http::header::HOST);
 
-            Ok(())
-        }
+        Ok(())
     }
 }

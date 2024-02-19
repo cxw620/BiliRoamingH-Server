@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::{axum_response, axum_route, generate_router, HandlerFuture};
+use crate::{axum_response, generate_router, HandlerFuture};
 use lib_utils::url::QueryMap;
 
 generate_router!(
