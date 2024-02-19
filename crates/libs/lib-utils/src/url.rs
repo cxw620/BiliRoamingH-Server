@@ -227,12 +227,20 @@ impl<'m> QueryMap<'m> {
     }
 
     #[inline]
+    #[tracing::instrument(level = "debug", name = "QueryMap.try_from_req", err)]
+    /// Try to parse query from axum request.
+    ///
+    /// Attention: FatalReqParamInvalid if query is missing.
     pub fn try_from_req(req: &'m axum::extract::Request) -> Result<Self> {
         let query = req.uri().query().ok_or(ServerError::FatalReqParamInvalid)?;
         Self::try_from_str(query)
     }
 
     #[inline]
+    #[tracing::instrument(level = "debug", name = "QueryMap.try_from_uri", err)]
+    /// Try to parse query from http::Uri.
+    ///
+    /// Attention: FatalReqParamInvalid if query is missing.
     pub fn try_from_uri(uri: &'m http::Uri) -> Result<Self> {
         let query = uri.query().ok_or(ServerError::FatalReqParamInvalid)?;
         Self::try_from_str(query)
