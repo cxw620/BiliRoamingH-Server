@@ -77,6 +77,42 @@ macro_rules! encode_grpc_header_bin {
     }};
 }
 
+/// Parse a field get from the query map
+///
+/// # Example
+/// ```no_run
+/// let m = QueryMap::try_from_str("aid=123&cid=456").unwrap();
+/// 
+/// let aid: u64 = parse_field!(m, "aid"); // If not exist or parse failed, return error
+/// let aid = parse_field!(m, "aid", u64); // If not exist or parse failed, return error. Specify type.
+/// let qn = parse_field!(m, "qn", u32, 127); // Specify type and default value
+/// let cid = parse_field!(m, "cid", 0u64); // If not exist or parse failed, return 0
+/// 
+/// ```
+#[macro_export]
+macro_rules! parse_field {
+    ($map:expr, $key:expr) => {
+        $map.get($key)
+            .ok_or(ServerError::FatalReqParamMissing)?
+            .parse()?
+    };
+    ($map:expr, $key:expr, $ty:ty) => {
+        $map.get($key)
+            .ok_or(ServerError::FatalReqParamMissing)?
+            .parse::<$ty>()?
+    };
+    ($map:expr, $key:expr, $default:expr) => {
+        $map.get($key)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or($default)
+    };
+    ($map:expr, $key:expr, $ty:ty, $default:expr) => {
+        $map.get($key)
+            .and_then(|v| v.parse::<$ty>().ok())
+            .unwrap_or($default)
+    };
+}
+
 #[macro_export]
 /// Parse gRPC Message
 ///
