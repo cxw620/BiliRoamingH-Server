@@ -14,6 +14,7 @@ tracing = { workspace = true }
 
 ## Basic deps
 http = { workspace = true }
+http-02 = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -24,6 +25,7 @@ tonic = { workspace = true, features = ["default", "gzip"] }
 
 ## Local libs
 lib_bilibili = { workspace = true }
+lib_rpc = { workspace = true, features = ["request"]}
 lib_utils = { workspace = true }
 
 [dev-dependencies]

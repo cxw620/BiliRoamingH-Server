@@ -86,3 +86,16 @@ macro_rules! http02_compat {
         }
     };
 }
+
+#[macro_export]
+macro_rules! impl_rpc_t {
+    ($($name:ident, $upstream:expr, $path:expr),*) => {
+        use lib_rpc::{request::interface::RpcT, utils::Upstream};
+        $(
+            impl lib_rpc::request::interface::RpcT<'_> for $name {
+                const UPSTREAM: lib_rpc::utils::Upstream<'static> = $upstream;
+                const PATH: &'static str = $path;
+            }
+        )*
+    };
+}

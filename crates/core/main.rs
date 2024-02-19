@@ -5,7 +5,9 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 use lib_core::server::config::{init_config, CONFIG_SERVER};
-use services::handler::{playurl::PlayurlRouter, test::RouterTest, InterceptHandler};
+use services::handler::{
+    playurl::PlayurlRouter, test::RouterTest, test_intercept::TestInterceptRouter, InterceptHandler,
+};
 
 #[tokio::main]
 async fn main() {
@@ -19,6 +21,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .merge(PlayurlRouter::new())
+        .merge(TestInterceptRouter::new())
         .nest("/test", RouterTest::new())
         .fallback::<_, ()>(InterceptHandler::default())
         .layer(OtelInResponseLayer::default())
