@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use crate::error::{Kind, RpcError};
 
 #[cfg(feature = "request")]
-pub(crate) use lib_utils::misc::BiliArea;
+pub(crate) use lib_utils::headers::ManagedHeaderMap;
 
 #[derive(Debug, Clone)]
 pub enum UpstreamType {
@@ -62,7 +62,7 @@ impl<'u> Upstream<'u> {
 
     #[inline]
     /// Create a new custom upstream.
-    /// 
+    ///
     /// Attention: The custom upstream must start with `https://` or `http://`.
     pub const fn new_custom(u_custom: &'u str) -> Self {
         Self {
