@@ -5,3 +5,6 @@ pub mod client_http02;
 pub mod proxy;
 #[cfg(feature = "__tls")]
 mod tls;
+
+// Re-export tonic::codec::CompressionEncoding
+pub use tonic::codec::CompressionEncoding;
