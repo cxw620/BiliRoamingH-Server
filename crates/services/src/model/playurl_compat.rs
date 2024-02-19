@@ -186,6 +186,11 @@ use lib_bilibili::bapis::app::playerunite::v1::PlayViewUniteReply;
 impl TryFrom<PlayViewUniteReply> for PgcPlayurlReply {
     type Error = anyhow::Error;
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "service.model.playurl_compat.PgcPlayurlReply.try_from PlayViewUniteReply",
+        err
+    )]
     fn try_from(reply: PlayViewUniteReply) -> Result<Self, Self::Error> {
         let vod_info = reply.vod_info.ok_or_else(|| {
             error!("PlayViewUniteReply.vod_info is None");
